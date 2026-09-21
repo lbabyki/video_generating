@@ -19,6 +19,14 @@ class SDXLBaselineWorkflowTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_baseline_workflow(workflow)
 
+    def test_cultural_variant_only_changes_prompts_and_output_prefix(self) -> None:
+        baseline = build_sdxl_baseline("sd_xl_base_1.0.safetensors")
+        variant = build_sdxl_baseline("sd_xl_base_1.0.safetensors", positive_prompt="cultural prompt", negative_prompt="cultural negative", filename_prefix="phase1c/experiment-001/variant-b-base-no-lora")
+        self.assertEqual(baseline["4"]["inputs"], variant["4"]["inputs"])
+        self.assertEqual(baseline["5"]["inputs"], variant["5"]["inputs"])
+        self.assertEqual(variant["2"]["inputs"]["text"], "cultural prompt")
+        self.assertEqual(variant["3"]["inputs"]["text"], "cultural negative")
+
     def test_unapproved_model_cannot_be_used(self) -> None:
         payload = {
             "id": "test", "name": "test", "model_type": "CHECKPOINT", "architecture": "SDXL_BASE",

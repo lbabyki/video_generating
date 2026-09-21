@@ -31,11 +31,17 @@ _ALLOWED_NODES = {
 }
 
 
-def build_sdxl_baseline(checkpoint_name: str) -> dict[str, dict[str, Any]]:
+def build_sdxl_baseline(
+    checkpoint_name: str,
+    *,
+    positive_prompt: str = BASELINE_PROMPT,
+    negative_prompt: str = BASELINE_NEGATIVE_PROMPT,
+    filename_prefix: str = "phase1b/sdxl-baseline",
+) -> dict[str, dict[str, Any]]:
     workflow: dict[str, dict[str, Any]] = {
         "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": checkpoint_name}},
-        "2": {"class_type": "CLIPTextEncode", "inputs": {"text": BASELINE_PROMPT, "clip": ["1", 1]}},
-        "3": {"class_type": "CLIPTextEncode", "inputs": {"text": BASELINE_NEGATIVE_PROMPT, "clip": ["1", 1]}},
+        "2": {"class_type": "CLIPTextEncode", "inputs": {"text": positive_prompt, "clip": ["1", 1]}},
+        "3": {"class_type": "CLIPTextEncode", "inputs": {"text": negative_prompt, "clip": ["1", 1]}},
         "4": {"class_type": "EmptyLatentImage", "inputs": {"width": 1344, "height": 768, "batch_size": 1}},
         "5": {
             "class_type": "KSampler",
@@ -53,7 +59,7 @@ def build_sdxl_baseline(checkpoint_name: str) -> dict[str, dict[str, Any]]:
             },
         },
         "6": {"class_type": "VAEDecode", "inputs": {"samples": ["5", 0], "vae": ["1", 2]}},
-        "7": {"class_type": "SaveImage", "inputs": {"images": ["6", 0], "filename_prefix": "phase1b/sdxl-baseline"}},
+        "7": {"class_type": "SaveImage", "inputs": {"images": ["6", 0], "filename_prefix": filename_prefix}},
     }
     validate_baseline_workflow(workflow)
     return workflow
@@ -61,7 +67,7 @@ def build_sdxl_baseline(checkpoint_name: str) -> dict[str, dict[str, Any]]:
 
 def validate_baseline_workflow(workflow: dict[str, dict[str, Any]]) -> None:
     types = {node.get("class_type") for node in workflow.values()}
-    if types - _ALLOWED_NODES or any("lora" in str(node).lower() or "custom" in str(node).lower() for node in workflow.values()):
+    if types - _ALLOWED_NODES or any("lora" in str(node.get("class_type", "")).lower() or "custom" in str(node.get("class_type", "")).lower() for node in workflow.values()):
         raise ValueError("baseline workflow must use only approved built-in nodes and no LoRA")
     if types != _ALLOWED_NODES:
         raise ValueError("baseline workflow is incomplete")
