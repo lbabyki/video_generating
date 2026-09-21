@@ -8,6 +8,10 @@
 | Cultural review | `REJECTED` |
 | Release eligible | `false` |
 | Reviewer mode | Human-assisted cultural review |
+asset_sha256: 3da46fd8ec0f07985e7d38e7484d567cfca3791dff7c5c65903c6d92b988ea03
+reviewed_at: <UTC timestamp>
+criteria_version: vietnam-cultural-profile/<version>
+reviewer_role: CULTURAL_REVIEWER
 
 ## Reasons for rejection
 
