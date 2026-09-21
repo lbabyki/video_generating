@@ -1,8 +1,8 @@
 # Educational Video Studio
 
-Local-first foundation for an educational-video pipeline. Phase 0A GPU recovery
-is blocked; this repository does not install, launch, or simulate ComfyUI,
-SDXL, LoRA inference, CUDA PyTorch, or model downloads.
+Local-first foundation for an educational-video pipeline. Phase 1A provides a
+local-only ComfyUI GPU server runtime; it does not install models, LoRAs,
+custom nodes, or perform inference.
 
 ## Runtime
 
@@ -28,5 +28,21 @@ sg docker -c 'docker compose up -d valkey'
 .venv/bin/python scripts/rq_smoke.py
 ```
 
-ComfyUI is deliberately disabled behind the Compose `gpu` profile. It remains
-blocked until NVIDIA, CUDA PyTorch, and (if applicable) Docker GPU checks pass.
+## ComfyUI GPU runtime (Phase 1A)
+
+ComfyUI is isolated behind the Compose `gpu` profile and only publishes
+`127.0.0.1:8188`. Its Docker image is built locally from the pinned official
+ComfyUI revision recorded in `docker/comfyui/COMFYUI_REVISION`; it never
+downloads a checkpoint or LoRA. Runtime model and media directories are
+Git-ignored bind mounts.
+
+```bash
+sg docker -c 'docker compose --profile gpu build comfyui'
+sg docker -c 'docker compose --profile gpu up -d comfyui'
+sg docker -c '.venv/bin/python scripts/comfyui_smoke.py'
+```
+
+The Phase 1A smoke test verifies container health, the local-only
+`/system_stats` API, a CUDA/NVIDIA device response, and no CUDA OOM in the
+last 100 log lines. It is a server-runtime check only; SDXL/LoRA installation
+and image generation remain a later phase.

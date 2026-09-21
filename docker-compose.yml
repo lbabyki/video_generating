@@ -6,9 +6,34 @@ services:
 
   comfyui:
     profiles: ["gpu"]
-    image: local/educational-video-comfyui:pending-gpu-preflight
+    build:
+      context: .
+      dockerfile: docker/comfyui/Dockerfile
+      args:
+        COMFYUI_COMMIT: b0f4b7b294ce482a2e071d9d762c133d38c7aa07
+        PYTORCH_VERSION: 2.11.0+cu128
+        TORCHVISION_VERSION: 0.26.0+cu128
+        TORCHAUDIO_VERSION: 2.11.0+cu128
+    image: local/educational-video-comfyui:1a-b0f4b7b
     ports: ["127.0.0.1:8188:8188"]
-    # Deliberately profile-gated until Phase 0A has passed.
+    gpus: all
+    volumes:
+      - ./models/checkpoints:/opt/ComfyUI/models/checkpoints
+      - ./models/loras:/opt/ComfyUI/models/loras
+      - ./models/vae:/opt/ComfyUI/models/vae
+      - ./models/controlnet:/opt/ComfyUI/models/controlnet
+      - ./models/clip_vision:/opt/ComfyUI/models/clip_vision
+      - ./input:/opt/ComfyUI/input
+      - ./output:/opt/ComfyUI/output
+      - ./user:/opt/ComfyUI/user
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8188/system_stats', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
 
   frontend-check:
     profiles: ["tooling"]
