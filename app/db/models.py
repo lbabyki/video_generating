@@ -25,6 +25,28 @@ class LoRARegistryEntry(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ModelRegistryEntry(Base):
+    __tablename__ = "model_registry"
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    name: Mapped[str] = mapped_column(String(160), unique=True, index=True)
+    model_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    architecture: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_repository: Mapped[str] = mapped_column(String(240), nullable=False)
+    source_revision: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    local_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    format: Mapped[str] = mapped_column(String(32), nullable=False)
+    compatible_workflow: Mapped[str] = mapped_column(String(120), nullable=False)
+    license_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    license_url: Mapped[str] = mapped_column(Text, nullable=False)
+    license_review_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    commercial_use: Mapped[str] = mapped_column(String(64), nullable=False)
+    review_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class VisualStyleProfile(Base):
     __tablename__ = "visual_style_profiles"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))

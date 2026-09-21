@@ -16,7 +16,15 @@ class ComfyUIClient:
 
     def __init__(self, base_url: str, client: httpx.AsyncClient | None = None) -> None:
         self.base_url = base_url.rstrip("/")
+        self._owns_client = client is None
         self.client = client or httpx.AsyncClient(base_url=self.base_url)
+
+    async def __aenter__(self) -> "ComfyUIClient":
+        return self
+
+    async def __aexit__(self, *_args: object) -> None:
+        if self._owns_client:
+            await self.client.aclose()
 
     async def submit(self, workflow: dict[str, Any], client_id: str) -> str:
         response = await self.client.post(f"{self.base_url}/prompt", json={"prompt": workflow, "client_id": client_id})

@@ -1,0 +1,20 @@
+{
+  "architecture": "SDXL_BASE",
+  "commercial_use": "REQUIRES_LEGAL_REVIEW",
+  "compatible_workflow": "phase1b-sdxl-base-v1",
+  "file_size": 6938078334,
+  "format": "SAFETENSORS",
+  "id": "sdxl-base-1.0",
+  "imported_at": null,
+  "license_id": "openrail++",
+  "license_review_status": "REVIEWED_RESTRICTED",
+  "license_url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/462165984030d82259a11f4367a4eed129e94a7b/LICENSE.md",
+  "local_filename": "sd_xl_base_1.0.safetensors",
+  "model_type": "CHECKPOINT",
+  "name": "Stable Diffusion XL Base 1.0",
+  "review_status": "APPROVED",
+  "sha256": "31e35c80fc4829d14f90153f4c74cd59c90b779f6afe05a74cd6120b893f7e5b",
+  "source_filename": "sd_xl_base_1.0.safetensors",
+  "source_repository": "stabilityai/stable-diffusion-xl-base-1.0",
+  "source_revision": "462165984030d82259a11f4367a4eed129e94a7b"
+}
