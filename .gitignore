@@ -1,0 +1,16 @@
+# Never version runtime assets, rendered media, or secrets.
+.env
+.env.*
+!.env.example
+models/
+datasets/
+outputs/
+input/
+temp/
+data/
+node_modules/
+dist/
+coverage/
+__pycache__/
+*.py[cod]
+.venv/

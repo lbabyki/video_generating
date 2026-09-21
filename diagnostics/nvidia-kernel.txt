@@ -1,0 +1,19 @@
+# NVIDIA kernel diagnostic (read-only)
+# Collected: 2026-09-19, Asia/Ho_Chi_Minh
+
+## Loaded modules
+nvidia_uvm 2183168
+nvidia_drm 143360
+nvidia_modeset 1867776
+nvidia 14708736
+nouveau: not loaded
+
+## Kernel log filter: NVRM, Xid, API mismatch, nouveau
+The current user cannot read the system kernel journal. `journalctl -k -b`
+returned the access notice that membership in `systemd-journal` is required.
+No NVRM/Xid/API-mismatch/nouveau conclusion can be drawn from this account.
+
+## Follow-up, read-only (administrator session)
+`journalctl -k -b --no-pager | rg -i 'nvrm|xid|api mismatch|nouveau|nvidia'`
+
+No module was unloaded and no driver/CUDA/kernel package was changed.

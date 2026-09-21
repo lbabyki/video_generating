@@ -1,0 +1,19 @@
+services:
+  valkey:
+    image: valkey/valkey:8.0.2-alpine
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports: ["127.0.0.1:6379:6379"]
+
+  comfyui:
+    profiles: ["gpu"]
+    image: local/educational-video-comfyui:pending-gpu-preflight
+    ports: ["127.0.0.1:8188:8188"]
+    # Deliberately profile-gated until Phase 0A has passed.
+
+  frontend-check:
+    profiles: ["tooling"]
+    image: node:24-bookworm
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:ro
+    command: ["node", "--version"]
