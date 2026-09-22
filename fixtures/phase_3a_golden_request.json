@@ -1,0 +1,10 @@
+{
+  "prompt": "Tạo video hoạt hình giáo dục 2D có tiêu đề Bảo vệ thiên nhiên cho môn Lịch sử và Địa lí lớp 4, dài 45 giây, khung hình 16:9. Bối cảnh Đồng bằng Bắc Bộ đương đại, có dòng sông và ruộng lúa. Học sinh cùng thu gom rác, trồng cây; người dân chung tay bảo vệ nguồn nước. Kết thúc bằng thông điệp mọi người hãy cùng bảo vệ thiên nhiên.",
+  "target_duration_seconds": 45,
+  "language": "vi-VN",
+  "aspect_ratio": "16:9",
+  "education_level": "GRADE_4",
+  "subject": "HISTORY_GEOGRAPHY",
+  "mode": "AUTO_STORYBOARD",
+  "requested_cultural_profile": "red-river-delta-v1"
+}
