@@ -133,6 +133,10 @@ def test_api_create_get_validate_approve(db_session):
         client = TestClient(app)
         response = client.post("/prompt-compilations", json=request().model_dump())
         assert response.status_code == 200
+        assert response.json()["planner_provider"] == "mock"
+        assert response.json()["compilation_status"] == "SUCCEEDED"
+        assert response.json()["planner_model"] is None
+        assert response.json()["resolved_model_digest"] == "mock-deterministic-v1"
         identifier = response.json()["id"]
         assert client.get(f"/prompt-compilations/{identifier}").status_code == 200
         assert client.get(f"/prompt-compilations/{identifier}/plan").json()["release_eligible"] is False

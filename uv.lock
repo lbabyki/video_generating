@@ -72,6 +72,7 @@ source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "redis" },
     { name = "rq" },
     { name = "sqlalchemy" },
@@ -80,7 +81,6 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "pytest" },
 ]
 
@@ -88,7 +88,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = "==1.16.1" },
     { name = "fastapi", specifier = "==0.115.12" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = "==0.28.1" },
+    { name = "httpx", specifier = "==0.28.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = "==8.3.5" },
     { name = "redis", specifier = "==5.2.1" },
     { name = "rq", specifier = "==2.3.3" },

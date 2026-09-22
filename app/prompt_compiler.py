@@ -5,8 +5,9 @@ import hashlib
 import json
 import os
 import re
+from decimal import Decimal
 from datetime import UTC, datetime
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -116,6 +117,10 @@ class ScenePlan(StrictModel):
 
     @model_validator(mode="after")
     def require_source_for_grounded_status(self):
+        for field_name in ("scene_id", "title", "narration_vi", "learning_purpose", "environment_id", "visual_action"):
+            value = getattr(self, field_name)
+            if not value.strip():
+                raise ValueError(f"{field_name} must not be empty")
         if not self.source_reference_ids and self.grounding_status == "GROUNDED":
             raise ValueError("scene without source_reference_ids cannot be GROUNDED")
         return self
@@ -142,6 +147,8 @@ class ProjectPlan(StrictModel):
 
     @model_validator(mode="after")
     def validate_references_and_scene_sequence(self):
+        if not self.title.strip() or not self.learning_objective.strip():
+            raise ValueError("title and learning_objective must not be empty")
         if not self.scenes:
             raise ValueError("plan must contain at least one scene")
         numbers = [s.scene_number for s in self.scenes]
@@ -149,6 +156,13 @@ class ProjectPlan(StrictModel):
             raise ValueError("scene_number values must be unique, continuous, and ordered")
         character_ids = {c.character_id for c in self.characters}
         environment_ids = {e.environment_id for e in self.environments}
+        if len(character_ids) != len(self.characters):
+            raise ValueError("character_id values must be unique")
+        if len(environment_ids) != len(self.environments):
+            raise ValueError("environment_id values must be unique")
+        scene_ids = [s.scene_id for s in self.scenes]
+        if len(set(scene_ids)) != len(scene_ids):
+            raise ValueError("scene_id values must be unique")
         for scene in self.scenes:
             if scene.environment_id not in environment_ids:
                 raise ValueError("scene references missing environment_id")
@@ -162,9 +176,88 @@ class ProjectPlan(StrictModel):
         return self
 
 
+def validate_compiled_plan(request: PromptCompilationRequest, plan: ProjectPlan) -> list[str]:
+    """Deterministic business checks applied to every planner's output."""
+    errors: list[str] = []
+    if plan.target_duration_seconds != request.target_duration_seconds:
+        errors.append("plan target duration does not match request")
+    if plan.language != request.language or plan.aspect_ratio != request.aspect_ratio:
+        errors.append("plan language/aspect ratio does not match request")
+    if plan.subject != request.subject or plan.education_level != request.education_level:
+        errors.append("plan subject/education level does not match request")
+    if plan.visual_style_profile_id != request.requested_style_profile:
+        errors.append("plan visual style profile must match the requested profile")
+    if request.requested_cultural_profile and plan.cultural_profile_id != request.requested_cultural_profile:
+        errors.append("plan cultural profile does not match requested profile")
+    if plan.governance_status != "DRAFT" or plan.release_eligible:
+        errors.append("planner output must remain DRAFT and release-ineligible")
+    if any(scene.source_reference_ids for scene in plan.scenes):
+        errors.append("planner invented source references; no source IDs were provided")
+    if plan.grounding_status == "GROUNDED" or any(s.grounding_status == "GROUNDED" for s in plan.scenes):
+        errors.append("grounded status requires supplied, validated reference sources")
+    if any(s.locked or s.content_review_status != "PENDING" or s.cultural_review_status != "PENDING" or s.keyframe_status != "NOT_GENERATED" for s in plan.scenes):
+        errors.append("planner output cannot approve, lock, or generate keyframes")
+    for value in plan.model_dump_json().split('"'):
+        if re.search(r"(?:[A-Za-z]:\\|/(?:[^\s/]+/)+[^\s]*|\b\w+\.(?:safetensors|ckpt|pt|gguf)\b|\b(?:Qwen|Ollama|ComfyUI|SDXL|LoRA)\b)", value, re.I):
+            errors.append("planner output contains a model identifier or local file path")
+            break
+    prompt = request.prompt
+    delta_context = bool(re.search(r"đồng bằng bắc bộ|đồng bằng sông hồng|châu thổ sông hồng", prompt, re.I))
+    if delta_context:
+        if request.target_duration_seconds == 45:
+            if not 7 <= len(plan.scenes) <= 10:
+                errors.append("45-second Red River Delta plan must contain 7–10 scenes")
+            if sum((Decimal(str(scene.duration_seconds)) for scene in plan.scenes), Decimal("0")) != Decimal("45"):
+                errors.append("45-second Red River Delta scene durations must total exactly 45 seconds")
+            if any(not 3 <= scene.duration_seconds <= 8 for scene in plan.scenes):
+                errors.append("45-second Red River Delta scenes must each be 3–8 seconds")
+        delta_envs = [env for env in plan.environments if env.region == "NORTHERN_VIETNAM" and env.subregion == "RED_RIVER_DELTA"]
+        if not delta_envs:
+            errors.append("specific Red River Delta request requires a grounded regional environment profile")
+        else:
+            if len(delta_envs) != 1 or len(plan.environments) != 1 or any(scene.environment_id != delta_envs[0].environment_id for scene in plan.scenes):
+                errors.append("Red River Delta scenes must reuse one stable environment ID")
+            if delta_envs[0].terrain.casefold() not in {"flat_alluvial_plain", "flat alluvial plain", "alluvial plain, flat"}:
+                errors.append("Red River Delta terrain must be FLAT_ALLUVIAL_PLAIN")
+            required_forbidden = {"núi cao", "làng nhà sàn", "kiến trúc cung điện trung hoa", "kiến trúc cung điện nhật"}
+            for environment in delta_envs:
+                forbidden = {item.casefold() for item in environment.forbidden_elements}
+                if not required_forbidden <= forbidden:
+                    errors.append("Red River Delta environment omits required forbidden visual patterns")
+                    break
+            if len({character.character_id for character in plan.characters if sum(character.character_id in scene.character_ids for scene in plan.scenes) >= 2}) < 1:
+                errors.append("at least one stable character ID must be reused across scenes")
+        if request.requested_cultural_profile and plan.cultural_profile_id != request.requested_cultural_profile:
+            errors.append("plan cultural profile does not match requested profile")
+    if is_historical_content(prompt) and plan.grounding_status != "NEEDS_REVIEW":
+        if not re.search(r"(thế kỷ|năm \d{3,4}|thời (?:lý|trần|lê|nguyễn|hùng vương))", prompt, re.I) or not re.search(r"(tại|ở|vùng|thành|kinh đô)\s+\S+|thăng long|hoa lư|cổ loa|huế|điện biên", prompt, re.I):
+            errors.append("historical content without period/location must be marked NEEDS_REVIEW")
+    regional_match = bool(re.search(r"đồng bằng bắc bộ|đồng bằng sông hồng|châu thổ sông hồng", prompt, re.I))
+    vague_north_match = bool(re.search(r"bắc bộ|miền bắc|tây bắc", prompt, re.I)) and not regional_match
+    if (re.search(r"việt nam", prompt, re.I) and not regional_match or vague_north_match) and plan.grounding_status != "NEEDS_REVIEW":
+        errors.append("regionally vague Vietnam prompt must be marked NEEDS_REVIEW")
+    conflict = regional_match and bool(re.search(r"miền nam|tây nguyên|nhà sàn|cung điện trung hoa|kiến trúc nhật", prompt, re.I))
+    if conflict and plan.grounding_status != "NEEDS_REVIEW":
+        errors.append("conflicting regional cues must be marked NEEDS_REVIEW")
+    if request.mode == "EXPLICIT_SCENES":
+        entries = list(re.finditer(r"(?im)^\s*(?:cảnh|scene)\s*(\d+)\s*[:.)-]?\s*(.*)$", prompt))
+        if len(entries) != len(plan.scenes):
+            errors.append("explicit scene count/order was not preserved")
+        else:
+            for entry, scene in zip(entries, plan.scenes):
+                body = (entry.group(2) + " " + prompt[entry.end():(entries[entries.index(entry) + 1].start() if entries.index(entry) + 1 < len(entries) else len(prompt))]).casefold()
+                expected = {word for word in re.findall(r"[\wÀ-ỹ]+", body) if len(word) > 3}
+                actual = {word for word in re.findall(r"[\wÀ-ỹ]+", f"{scene.title} {scene.narration_vi} {scene.visual_action}".casefold()) if len(word) > 3}
+                if expected and len(expected & actual) / len(expected) < 0.2:
+                    errors.append("explicit scene meaning/order may not have been preserved")
+                    break
+    return errors
+
+
 class PromptPlanner(Protocol):
     name: str
     version: str
+    def identity(self) -> dict[str, Any]: ...
     def compile(self, request: PromptCompilationRequest, compilation_id: str) -> ProjectPlan: ...
 
 
@@ -183,6 +276,10 @@ _DEFAULT_SCENES = [
 class DeterministicMockPromptPlanner:
     name = "DeterministicMockPromptPlanner"
     version = PLANNER_VERSION
+
+    def identity(self) -> dict[str, Any]:
+        return {"provider": "mock", "model": None, "resolved_digest": "mock-deterministic-v1",
+                "template_version": "mock-template-v1"}
 
     def compile(self, request: PromptCompilationRequest, compilation_id: str) -> ProjectPlan:
         prompt = request.prompt
@@ -271,8 +368,12 @@ def normalized_request(request: PromptCompilationRequest) -> dict:
     return result
 
 
-def request_digest(request: PromptCompilationRequest, planner: PromptPlanner, cultural_profile_version: str = CULTURAL_PROFILE_VERSION) -> str:
+def request_digest(request: PromptCompilationRequest, planner: PromptPlanner, cultural_profile_version: str = CULTURAL_PROFILE_VERSION,
+                   identity: dict[str, Any] | None = None) -> str:
+    identity = identity or (planner.identity() if hasattr(planner, "identity") else {"provider": "mock", "resolved_digest": planner.version})
+    hash_identity = {key: identity.get(key) for key in ("provider", "resolved_digest", "template_version", "seed", "temperature")}
     material = {"request": normalized_request(request), "planner_type": planner.name, "planner_version": planner.version,
+                "planner_identity": hash_identity,
                 "schema_version": SCHEMA_VERSION, "cultural_profile_version": cultural_profile_version}
     encoded = json.dumps(material, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
