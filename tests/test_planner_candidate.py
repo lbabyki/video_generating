@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 import app.ollama_prompt_planner as planner_module
 from app.db.models import Base, PromptCompilationRecord
 from app.ollama_prompt_planner import GPUStats, OllamaQwenPromptPlanner, PlannerError, safe_pydantic_issues
-from app.planner_candidate import CandidateProjectPlanCompiler, CandidateSemanticError, PlannerCandidate
+from app.planner_candidate import CandidateProjectPlanCompiler, CandidateSemanticError, PlannerCandidate, resolve_terrain
 from app.prompt_compilation_service import PromptCompilationService, record_response
 from app.prompt_compiler import DeterministicMockPromptPlanner, PromptCompilationRequest
 
@@ -247,3 +247,54 @@ def test_failed_v1_and_v2_records_are_untouched_by_later_compilation():
     after = [(row.id, row.request_hash, row.prompt_template_version, row.validation_errors_json, row.updated_at) for row in sentinel]
     assert after == before
     db.close(); engine.dispose()
+
+
+@pytest.mark.parametrize("raw", ["flat", "flatland", "flat plain", "delta", "river delta", "alluvial plain", "low-lying plain", "bằng phẳng", "đồng bằng", "đồng bằng phù sa", "vùng châu thổ"])
+def test_terrain_compatible_values_resolve_to_flat_delta(raw):
+    result = resolve_terrain(raw, "red-river-delta")
+    assert result["terrain_classification"] == "COMPATIBLE"
+    assert result["resolved_terrain"] == "flat_delta"
+
+
+@pytest.mark.parametrize("raw", ["rice field", "ruộng lúa", "riverbank", "bờ sông", "community garden", "vườn cây cộng đồng"])
+def test_terrain_location_land_use_is_inherited_and_marked_misclassified(raw):
+    result = resolve_terrain(raw, "red-river-delta")
+    assert result["terrain_classification"] == "LOCATION_OR_LAND_USE"
+    assert result["terrain_inherited_from_region"] is True
+    assert result["model_field_misclassified"] is True
+
+
+def test_missing_terrain_is_inherited_from_explicit_region():
+    result = resolve_terrain(None, "red-river-delta")
+    assert result["terrain_classification"] == "MISSING"
+    assert result["resolved_terrain"] == "flat_delta"
+
+
+def test_ambiguous_non_conflicting_terrain_is_reviewed_and_inherited():
+    result = resolve_terrain("địa hình ven nước", "red-river-delta")
+    assert result["terrain_classification"] == "AMBIGUOUS"
+    assert result["review_required"] is True
+    assert result["resolved_terrain"] == "flat_delta"
+
+
+@pytest.mark.parametrize("raw", ["high mountain", "mountain valley", "plateau/highland", "núi cao", "thung lũng núi", "cao nguyên", "Tây Bắc", "Tây Nguyên"])
+def test_terrain_explicit_conflicts_are_rejected(raw):
+    result = resolve_terrain(raw, "red-river-delta")
+    assert result["terrain_classification"] == "CONFLICT"
+    assert result["conflict_detected"] is True
+
+
+def test_v4_terrain_regression_fixture_resolves_without_conflict():
+    fixture = json.load(open("fixtures/phase3b_r3/terrain_resolution_regression.json", encoding="utf-8"))
+    results = [resolve_terrain(item["terrain"], "red-river-delta") for item in fixture["environments"]]
+    assert all(item["resolved_terrain"] == "flat_delta" for item in results)
+    assert all(not item["conflict_detected"] for item in results)
+
+
+def test_conflicting_environment_only_marks_referencing_scene_orders():
+    source = candidate().model_dump(mode="python")
+    source["environments"].append({**source["environments"][0], "name": "Mountain", "terrain": "high mountain"})
+    source["scenes"][2]["environment"] = "Mountain"
+    with pytest.raises(CandidateSemanticError) as caught:
+        CandidateProjectPlanCompiler().compile(request(), PlannerCandidate.model_validate(source), "id", "hash")
+    assert caught.value.failed_scene_orders == [3]

@@ -37,7 +37,7 @@ class PlannerCandidateEnvironment(StrictModel):
     region: str = Field(min_length=1, max_length=120)
     subregion: str = Field(min_length=1, max_length=120)
     historical_period: str = Field(min_length=1, max_length=120)
-    terrain: str = Field(min_length=1, max_length=160)
+    terrain: str | None = Field(default=None, max_length=160)
     architecture_profile: str = Field(min_length=1, max_length=200)
     visual_description: str = Field(min_length=1, max_length=1600)
     required_elements: list[str] = Field(default_factory=list, max_length=30)
@@ -77,6 +77,7 @@ class CandidateSemanticError(ValueError):
 
 
 REGION_NORMALIZATION_RULE_VERSION = "red-river-delta-aliases-v1"
+TERRAIN_NORMALIZATION_RULE_VERSION = "terrain-normalization-v1"
 REGION_ALIASES = {
     "đồng bằng bắc bộ": "red-river-delta",
     "đồng bằng sông hồng": "red-river-delta",
@@ -95,6 +96,51 @@ CONFLICT_TERMS = {
     "kiến trúc cung điện trung hoa": "foreign_palace_chinese",
     "kiến trúc cung điện nhật": "foreign_palace_japanese",
 }
+
+class TerrainResolver:
+    """Resolve model terrain proposals against the authoritative region profile."""
+    _compatible = ("flat", "flatland", "flat plain", "delta", "river delta", "alluvial plain",
+                   "low-lying plain", "bằng phẳng", "đồng bằng", "đồng bằng phù sa", "vùng châu thổ")
+    _location_land_use = ("rice field", "ruộng lúa", "riverbank", "bờ sông", "community garden",
+                          "vườn cây cộng đồng", "village lane", "đường làng", "schoolyard", "sân trường",
+                          "communal-house yard", "sân đình", "residential area", "khu dân cư", "bamboo hedge", "hàng tre")
+    _conflict = ("high mountain", "mountain valley", "steep mountain", "plateau", "highland", "mountainous terrain",
+                 "núi cao", "thung lũng núi", "cao nguyên", "địa hình dốc", "tây bắc", "tây nguyên")
+
+    def resolve(self, raw: str | None, *, canonical_region_key: str | None) -> dict:
+        value = semantic_key(raw or "")
+        if any(term in value for term in self._conflict):
+            classification = "CONFLICT"
+            conflict = True
+            review = False
+        elif not value:
+            classification = "MISSING"
+            conflict = False
+            review = False
+        elif any(term in value for term in self._location_land_use):
+            classification = "LOCATION_OR_LAND_USE"
+            conflict = False
+            review = False
+        elif any(term in value for term in self._compatible):
+            classification = "COMPATIBLE"
+            conflict = False
+            review = False
+        else:
+            classification = "AMBIGUOUS"
+            conflict = False
+            review = True
+        inherited = canonical_region_key == "red-river-delta" and classification != "CONFLICT"
+        return {"proposed_terrain_raw": raw, "terrain_classification": classification,
+                "resolved_terrain": "flat_delta" if inherited else (raw or "UNSPECIFIED"),
+                "resolution_source": "regional_environment_profile" if inherited else "model_proposal",
+                "terrain_inherited_from_region": inherited,
+                "model_field_misclassified": classification == "LOCATION_OR_LAND_USE",
+                "normalization_rule_version": TERRAIN_NORMALIZATION_RULE_VERSION,
+                "conflict_detected": conflict, "review_required": review}
+
+
+def resolve_terrain(raw: str | None, canonical_region_key: str | None) -> dict:
+    return TerrainResolver().resolve(raw, canonical_region_key=canonical_region_key)
 
 
 def safe_pydantic_issues(exc: ValidationError, limit: int = 40) -> list[dict]:
@@ -191,8 +237,9 @@ def validate_candidate_semantics(candidate: PlannerCandidate, request: PromptCom
         failed.update(context_failed)
         if context["canonical_region_key"] == "red-river-delta":
             for environment in candidate.environments:
-                if environment.terrain.casefold() not in {"flat_alluvial_plain", "flat alluvial plain", "đồng bằng phù sa bằng phẳng", "flat_delta"}:
-                    issues.append({"loc": ["environments", environment.name, "terrain"], "type": "terrain_not_flat", "msg": "Red River Delta terrain must be flat alluvial plain."})
+                terrain = resolve_terrain(environment.terrain, context["canonical_region_key"])
+                if terrain["conflict_detected"]:
+                    issues.append({"loc": ["environments", environment.name, "terrain"], "type": "terrain_conflict", "msg": "Terrain conflicts with the Red River Delta regional profile."})
                     failed.update(scene.scene_order for scene in candidate.scenes if semantic_key(scene.environment) == semantic_key(environment.name))
     return issues, sorted(failed)
 
@@ -216,6 +263,8 @@ class CandidateProjectPlanCompiler:
 
         characters_by_key = {semantic_key(item.name): item for item in candidate.characters}
         environments_by_key = {semantic_key(item.name): item for item in candidate.environments}
+        terrain_resolutions = {key: resolve_terrain(item.terrain, region_provenance.get("canonical_region_key"))
+                               for key, item in environments_by_key.items()}
         character_ids = {
             key: str(uuid5(NAMESPACE_URL, f"phase3b-v4:{identity_basis}:character:{key}"))
             for key in characters_by_key
@@ -237,7 +286,8 @@ class CandidateProjectPlanCompiler:
             forbidden = _unique([*item.negative_constraints, *required_forbidden])
             final_environments.append(EnvironmentReference(
                 environment_id=location_ids[key], country=item.country, region="NORTHERN_VIETNAM" if is_delta_request else item.region,
-                subregion="RED_RIVER_DELTA" if is_delta_request else item.subregion, historical_period=item.historical_period, terrain="FLAT_ALLUVIAL_PLAIN" if is_delta_request else item.terrain,
+                subregion="RED_RIVER_DELTA" if is_delta_request else item.subregion, historical_period=item.historical_period,
+                terrain=("FLAT_ALLUVIAL_PLAIN" if is_delta_request else terrain_resolutions[key]["resolved_terrain"]),
                 architecture_profile=item.architecture_profile, visual_description=item.visual_description,
                 required_elements=_unique([*item.required_elements, *item.cultural_constraints]), forbidden_elements=forbidden,
                 reference_asset_ids=[], review_status="DRAFT",
@@ -305,6 +355,7 @@ class CandidateProjectPlanCompiler:
             "scenes": timeline_provenance,
             "regional_context": region_provenance,
             "regional_environment_profile_id": regional_profile_id,
+            "terrain_resolutions": terrain_resolutions,
         }
         return plan, provenance
 

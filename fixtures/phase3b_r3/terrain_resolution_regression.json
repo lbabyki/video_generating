@@ -1,0 +1,7 @@
+{
+  "environments": [
+    {"name": "Ruộng lúa Đồng bằng Bắc Bộ", "terrain": "Đồng bằng phẳng, có dòng sông lớn chảy qua"},
+    {"name": "Bờ sông", "terrain": "Bờ sông bằng phẳng, có cây cối ven bờ"},
+    {"name": "Vườn cây cộng đồng", "terrain": "Đất bằng phẳng, có nhiều cây xanh"}
+  ]
+}
