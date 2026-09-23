@@ -288,6 +288,10 @@ class VisualPromptPackage(Base):
     release_eligible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     keyframe_status: Mapped[str] = mapped_column(String(32), nullable=False, default="NOT_GENERATED")
     valid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    package_status: Mapped[str] = mapped_column(String(16), nullable=False, default="ACTIVE")
+    supported_evidence_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    project_design_source_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    excluded_claims: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
 
 
 class GroundingRequirement(Base):
@@ -301,6 +305,21 @@ class GroundingRequirement(Base):
     source_reference_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     needs_more_evidence: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class GroundingResolution(Base):
+    __tablename__ = "grounding_resolutions"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    bible_set_id: Mapped[str] = mapped_column(ForeignKey("visual_bible_sets.id", ondelete="CASCADE"), nullable=False)
+    requirement_id: Mapped[str] = mapped_column(ForeignKey("grounding_requirements.id", ondelete="CASCADE"), nullable=False, unique=True)
+    original_requirement: Mapped[str] = mapped_column(Text, nullable=False)
+    factual_evidence_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    project_design_evidence: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    supported_scope: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    excluded_claims: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    resolution_mode: Mapped[str] = mapped_column(String(48), nullable=False)
+    reviewer_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class EvidenceLink(Base):

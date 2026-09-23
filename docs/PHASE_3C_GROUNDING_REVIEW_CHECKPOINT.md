@@ -132,3 +132,14 @@ riverbank EnvironmentBible and cultural review remain unapproved. The two
 partial requirements for rice fields and vegetation retain
 `needs_more_evidence=true`; VisualBibleSet remains `DRAFT`, packages remain
 unreleasable, and no lock or final approval was performed.
+
+## Phase 3C-C2C — Restricted-scope grounding resolution
+
+Status: `GROUNDING_RESOLVED_VISUAL_PROMPTS_IN_REVIEW`
+
+- Reviewer `40a6df62-f60a-439c-8509-890b9db2ee08` resolved seven requirements with restricted-scope records; factual partial links remain marked `PARTIALLY_SUPPORTED`.
+- Project-owned visual design source: `lesson08-red-river-delta/documents/project-owned/environment_design_decision_v1.pdf`, registered as `VISUAL_REFERENCE`, `PROJECT_OWNED`, `REFERENCE_ONLY`; it is not training evidence.
+- Rice, vegetation, school design scopes and exclusions are persisted in `grounding_resolutions`; no unsupported species, architecture, terrain, uniform generalization, or historical claims were added.
+- Riverbank EnvironmentBible review is `APPROVED`; all four EnvironmentBibles and both CharacterBibles are approved for this review stage. Cultural review remains `PENDING`.
+- Eight prior v1 prompt packages remain immutable and are `SUPERSEDED`; eight deterministic v2 packages are `ACTIVE`, `DRAFT`, `release_eligible=false`, `keyframe_status=NOT_GENERATED`.
+- VisualBibleSet is `IN_REVIEW`. It is not `APPROVED` or `LOCKED`; prompt-to-image/video/audio generation has not run.
