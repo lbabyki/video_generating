@@ -11,6 +11,7 @@ from typing import Any, Literal, Protocol
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from app.timeline_allocator import TIMELINE_ALLOCATOR_VERSION
 
 SCHEMA_VERSION = "1.0"
 PLANNER_VERSION = "1.0"
@@ -27,7 +28,7 @@ def is_historical_content(prompt: str) -> bool:
 
 
 class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
 
 
 class PromptCompilationRequest(StrictModel):
@@ -94,7 +95,7 @@ class ScenePlan(StrictModel):
     scene_id: str
     scene_number: int = Field(ge=1)
     title: str
-    duration_seconds: float = Field(ge=3, le=8)
+    duration_seconds: int = Field(ge=3, le=8)
     narration_vi: str = Field(min_length=1)
     learning_purpose: str
     environment_id: str
@@ -333,9 +334,8 @@ class DeterministicMockPromptPlanner:
         count = len(items)
         if not 3 <= request.target_duration_seconds / count <= 8:
             raise ValueError("target duration and scene count cannot satisfy 3–8 second scene limits")
-        each = round(request.target_duration_seconds / count, 3)
-        durations = [each] * count
-        durations[-1] = round(request.target_duration_seconds - sum(durations[:-1]), 3)
+        base, remainder = divmod(request.target_duration_seconds, count)
+        durations = [base + (1 if i < remainder else 0) for i in range(count)]
         scenes = []
         for i, ((title, topic, purpose, narration, action, shot), duration) in enumerate(zip(items, durations)):
             scenes.append(ScenePlan(scene_id=str(uuid5(NAMESPACE_URL, f"{compilation_id}:scene:{i + 1}")), scene_number=i + 1, title=title, duration_seconds=duration,
@@ -374,6 +374,7 @@ def request_digest(request: PromptCompilationRequest, planner: PromptPlanner, cu
     hash_identity = {key: identity.get(key) for key in ("provider", "resolved_digest", "template_version", "seed", "temperature")}
     material = {"request": normalized_request(request), "planner_type": planner.name, "planner_version": planner.version,
                 "planner_identity": hash_identity,
-                "schema_version": SCHEMA_VERSION, "cultural_profile_version": cultural_profile_version}
+                "schema_version": SCHEMA_VERSION, "cultural_profile_version": cultural_profile_version,
+                "timeline_allocator_version": TIMELINE_ALLOCATOR_VERSION}
     encoded = json.dumps(material, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()

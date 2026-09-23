@@ -137,6 +137,12 @@ class PromptCompilationRecord(Base):
     planner_temperature: Mapped[float | None] = mapped_column(Float, nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     validation_result_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    validation_stage: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    error_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_scene_orders_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    candidate_response_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    candidate_diagnostic_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    timeline_provenance_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

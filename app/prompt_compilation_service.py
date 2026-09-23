@@ -63,7 +63,10 @@ class PromptCompilationService:
             schema_version = plan.schema_version
         except PlannerError as exc:
             execution = getattr(self.planner, "execution_metadata", execution)
-            execution["validation_errors"] = exc.validation_errors[:20] or [exc.code]
+            execution["validation_errors"] = exc.validation_errors[:40] or [{"loc": [], "type": exc.code, "msg": exc.safe_message}]
+            execution["validation_stage"] = exc.validation_stage
+            execution["failed_scene_orders"] = exc.failed_scene_orders
+            execution["error_count"] = len(execution["validation_errors"])
             status = "COMPILATION_FAILED"
             plan_json = None
             schema_version = "1.0"
@@ -82,6 +85,12 @@ class PromptCompilationService:
             planner_seed=identity.get("seed"), planner_temperature=identity.get("temperature"),
             latency_ms=execution.get("latency_ms"),
             validation_result_json=json.dumps({"valid": status == "SUCCEEDED", "errors": execution.get("validation_errors", []), "warnings": warnings}, ensure_ascii=False),
+            validation_stage=execution.get("validation_stage", "complete" if status == "SUCCEEDED" else "planner"),
+            error_count=execution.get("error_count", len(execution.get("validation_errors", []))),
+            failed_scene_orders_json=json.dumps(execution.get("failed_scene_orders", []), ensure_ascii=False),
+            candidate_response_sha256=execution.get("candidate_response_sha256"),
+            candidate_diagnostic_path=execution.get("candidate_diagnostic_path"),
+            timeline_provenance_json=json.dumps(execution.get("timeline_provenance", {}), ensure_ascii=False),
             created_at=now, updated_at=now)
         try:
             self.db.add(record)
@@ -173,6 +182,10 @@ def record_response(record: PromptCompilationRecord) -> dict:
         "compilation_status": record.compilation_status, "repair_attempts": record.repair_attempts,
         "planner_seed": record.planner_seed, "planner_temperature": record.planner_temperature,
         "latency_ms": record.latency_ms, "validation_result": json.loads(record.validation_result_json or "{}"),
+        "validation_stage": record.validation_stage, "error_count": record.error_count,
+        "failed_scene_orders": json.loads(record.failed_scene_orders_json or "[]"),
+        "candidate_response_sha256": record.candidate_response_sha256,
+        "timeline_provenance": json.loads(record.timeline_provenance_json or "{}"),
         "validation_errors": json.loads(record.validation_errors_json),
         "resource_metrics": json.loads(record.resource_metrics_json),
         "validation_warnings": json.loads(record.validation_warnings_json),

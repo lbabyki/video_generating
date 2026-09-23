@@ -18,7 +18,10 @@ from app.db.session import SessionLocal
 from app.ollama_prompt_planner import LocalResourceGuard, OllamaQwenPromptPlanner
 from app.prompt_compiler import PromptCompilationRequest, ProjectPlan, request_digest
 
-FAILED_V1_ID = "939d36fc-2756-4743-8ce1-76aeabdec6b9"
+FAILED_COMPILATION_IDS = {
+    "939d36fc-2756-4743-8ce1-76aeabdec6b9",
+    "7e9977ae-ac24-438f-bcd9-fd00e8f8011f",
+}
 EXPECTED_DIGEST = "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8"
 
 
@@ -32,7 +35,7 @@ def main() -> int:
         identity = planner.identity()
         if (settings.ollama_model != "qwen3:14b" or identity.get("resolved_digest", "").removeprefix("sha256:") != EXPECTED_DIGEST
                 or identity.get("quantization") != "Q4_K_M" or identity.get("license") != "Apache-2.0"
-                or identity.get("template_version") != "phase3b-v2" or settings.prompt_planner_temperature != 0
+                or identity.get("template_version") != "phase3b-v3" or settings.prompt_planner_temperature != 0
                 or settings.prompt_planner_seed != 314159 or settings.ollama_keep_alive not in {"0", "0s"}):
             print("FAIL: model, digest, quantization, license, template, temperature, seed, or keep_alive does not match the approved live run", file=sys.stderr)
             return 2
@@ -40,11 +43,13 @@ def main() -> int:
         snapshot = guard.preflight(planner.max_gpu_utilization, planner.max_gpu_memory_mib)
         digest = request_digest(request, planner, "1", identity=identity)
         with SessionLocal() as db:
-            previous_failure = db.get(PromptCompilationRecord, FAILED_V1_ID)
-            previous_snapshot = None if previous_failure is None else (
-                previous_failure.compilation_status, previous_failure.plan_json, previous_failure.request_hash,
-                previous_failure.prompt_template_version, previous_failure.repair_attempts,
-                previous_failure.validation_errors_json, previous_failure.updated_at)
+            previous_snapshots = {}
+            for failed_id in FAILED_COMPILATION_IDS:
+                previous_failure = db.get(PromptCompilationRecord, failed_id)
+                previous_snapshots[failed_id] = None if previous_failure is None else (
+                    previous_failure.compilation_status, previous_failure.plan_json, previous_failure.request_hash,
+                    previous_failure.prompt_template_version, previous_failure.repair_attempts,
+                    previous_failure.validation_errors_json, previous_failure.updated_at)
             existing = db.scalar(select(PromptCompilationRecord).where(PromptCompilationRecord.request_hash == digest))
             if existing:
                 print("FAIL: this exact resolved-model request already exists; refusing a non-live retry", file=sys.stderr)
@@ -103,15 +108,16 @@ def main() -> int:
             raise RuntimeError("persisted plan failed API deterministic validation")
         with SessionLocal() as db:
             new_record = db.get(PromptCompilationRecord, compilation["id"])
-            if new_record.id == FAILED_V1_ID:
-                raise RuntimeError("new attempt reused the failed v1 compilation ID")
-            after_failure = db.get(PromptCompilationRecord, FAILED_V1_ID)
-            after_snapshot = None if after_failure is None else (
-                after_failure.compilation_status, after_failure.plan_json, after_failure.request_hash,
-                after_failure.prompt_template_version, after_failure.repair_attempts,
-                after_failure.validation_errors_json, after_failure.updated_at)
-            if previous_snapshot != after_snapshot:
-                raise RuntimeError("previous failed v1 record changed during the new attempt")
+            if new_record.id in FAILED_COMPILATION_IDS:
+                raise RuntimeError("new attempt reused an existing failed compilation ID")
+            for failed_id, previous_snapshot in previous_snapshots.items():
+                after_failure = db.get(PromptCompilationRecord, failed_id)
+                after_snapshot = None if after_failure is None else (
+                    after_failure.compilation_status, after_failure.plan_json, after_failure.request_hash,
+                    after_failure.prompt_template_version, after_failure.repair_attempts,
+                    after_failure.validation_errors_json, after_failure.updated_at)
+                if previous_snapshot != after_snapshot:
+                    raise RuntimeError(f"previous failed compilation {failed_id} changed during the new attempt")
 
     metrics = compilation.get("resource_metrics", {})
     summary = {

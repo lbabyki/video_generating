@@ -1,9 +1,10 @@
 # Phase 3B — Local Qwen Prompt Planner
 
-Status: **NOT_READY**. The local Ollama provider, persistence, resource guard,
-and mocked integration coverage are in place. Two authorized live golden
-compilations failed validation, each after one repair. Phase 3B does not pass
-the live golden-output gate.
+Status: **RUNTIME_READY_FOR_LIVE_RETEST**. Two authorized live golden
+compilations failed validation, each after one repair. This checkpoint records
+runtime readiness only; it does not claim `QWEN_PROMPT_PLANNER_READY` or
+`PROMPT_TO_VIDEO_PASS`. Both failed records are preserved. No live inference
+was run for the v3 implementation work.
 
 ## Scope and API
 
@@ -15,19 +16,24 @@ prompt-template version, status, warnings, errors, repair count, and resource
 metrics. Failed compilations persist with `COMPILATION_FAILED` and a null
 `plan_json`; they cannot be validated as successful or approved.
 
-Ollama structured output passes `ProjectPlan.model_json_schema()` directly to
-`/api/generate`. The final response must be a JSON object with no Markdown or
-surrounding prose. The system instruction treats delimited prompt text as data,
-disables thinking, forbids invented sources and approvals, and requires exact
-duration constraints. Pydantic and deterministic validators check every plan.
-At most one structured repair is attempted. Prompts, model responses, tokens,
-and hidden reasoning are not written to application logs or failure records.
+Ollama structured output passes `PlannerCandidate.model_json_schema()` to
+`/api/generate`. The compiler validates candidate semantics, resolves stable
+IDs, allocates integer durations, and constructs the final `ProjectPlan` in
+`DRAFT`. The model does not supply final IDs, source references, keyframes, or
+release decisions. At most one repair is used for candidate JSON/schema or
+semantic reference errors; timeline allocation never invokes a repair.
+Structured validation errors and the candidate response hash are persisted.
+Optional local diagnostics store only sanitized parseable candidate JSON under
+the ignored diagnostics directory with restrictive file permissions; paths
+and content are excluded from normal API responses. Model thinking is not
+persisted.
 
 Configuration is read from environment: `PROMPT_PLANNER_PROVIDER`,
 `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_SECONDS`,
 `OLLAMA_KEEP_ALIVE`, `PROMPT_PLANNER_TEMPERATURE`, `PROMPT_PLANNER_SEED`,
-`PROMPT_TEMPLATE_VERSION`, `PROMPT_PLANNER_ALLOW_REMOTE`, and the GPU idle
-threshold variables. Ollama defaults to loopback and remote URLs are rejected
+`PROMPT_TEMPLATE_VERSION`, `PROMPT_PLANNER_STORE_DIAGNOSTICS`,
+`PROMPT_PLANNER_DIAGNOSTICS_DIR`, `PROMPT_PLANNER_ALLOW_REMOTE`, and the GPU
+idle threshold variables. Ollama defaults to loopback and remote URLs are rejected
 unless an administrator explicitly opts in. The generation call uses structured
 JSON Schema, `think=false`, bounded timeout/response size, temperature and seed.
 
@@ -51,20 +57,20 @@ local Ollama metadata reported:
 - Ollama `modified_at` used as the installed timestamp:
   `2026-09-22T16:36:48.051680983+07:00`.
 
-The failed live compilation stored this provenance with template
-`phase3b-v1`. A follow-up prompt fix is versioned `phase3b-v2`, so its request
-hash will not collide with the failed v1 attempt. Resolved model digest,
-provider, and template version participate in request hashing; the mutable
-tag alone is insufficient.
+The two historical failed live compilations used templates `phase3b-v1` and
+`phase3b-v2`. The current candidate prompt is `phase3b-v3`. Resolved model
+digest, provider, template, seed, temperature, and timeline allocator version
+participate in request hashing; the mutable tag alone is insufficient.
 
-Migration `0008_qwen_planner_provenance` follows `0007_prompt_compilations`.
-It adds compilation status and planner metadata, makes plan JSON nullable for
-failed runs, and stores local model provenance. Both the clean SQLite upgrade
-and the existing local database are at **0008_qwen_planner_provenance**.
+Migration `0010_candidate_timeline_observability` follows `0009_qwen_run_metrics`.
+It adds validation stage, error count, failed scene orders, candidate-response
+SHA-256, private diagnostic path, and timeline provenance. Migrations 0008 and
+0009 were not modified. The timeline record retains each suggested duration,
+final integer duration, adjustment flag/reason, and allocator version.
 
 ## Tests and checks
 
-- Full pytest: **65 passed**, one upstream Starlette deprecation warning.
+- Full pytest: see the v3 verification section below.
 - Mocked Ollama HTTP tests cover structured schema, invalid JSON, schema and
   extra-field failures, one repair and failed repair, timeout, connection error,
   oversized response, local URL enforcement, digest-sensitive idempotency,
@@ -73,8 +79,8 @@ and the existing local database are at **0008_qwen_planner_provenance**.
   omission.
 - API create/get/validate/approve smoke with the configured mock provider:
   **PASS** (FastAPI TestClient).
-- Clean Alembic upgrade/current and existing database upgrade: **PASS**,
-  migration head `0008_qwen_planner_provenance`.
+- Clean Alembic upgrade/current and existing database upgrade: recorded below,
+  migration head `0010_candidate_timeline_observability`.
 - Application SQLite foreign keys: **enabled**.
 - `docker compose config --quiet`: **PASS**.
 - ComfyUI regression smoke after Qwen unload: **PASS**, localhost-only and
@@ -100,12 +106,10 @@ VRAM was **1,023 MiB before**, **30,691 MiB peak**, and **994 MiB after**. Ollam
 reported no loaded models after the `keep_alive=0` unload; VRAM release
 verification passed. ComfyUI smoke ran only after this unload.
 
-The failure showed that the total-duration invariant was not explicit in the
-v1 system instruction and that repair feedback omitted numeric schema bounds.
-The code now uses `phase3b-v2`, explicitly instructs 3–8 seconds per scene and
-the requested total, and includes safe limit values in repair errors. These
-changes pass mocked tests but were not sent to Qwen because the task limited
-this run to one live compilation.
+The v1 failure showed that duration limits were not enforced effectively. The
+v2 live attempt also failed at a root-level Pydantic validation error whose
+message was not retained. The v3 compiler separates semantic planning from
+timeline arithmetic, so duration sums are produced and verified locally.
 
 ## Limitations
 
@@ -141,3 +145,26 @@ attempt; VRAM peak was 30,683 MiB and post-unload VRAM was 984 MiB. The attempt
 did not satisfy the live gate. The full post-run suite passed (65 tests),
 Alembic current is `0009_qwen_run_metrics`, and Docker Compose configuration
 validation passed. There was no third live attempt.
+
+## Candidate compiler and v3 verification
+
+`PlannerCandidate` contains semantic character/environment references and
+scene content. Candidate validation produces structured `loc`, `type`, `msg`,
+and safe context fields. Unknown character or environment references fail
+semantic validation rather than inventing identities. UUID5 IDs are resolved
+from the normalized request identity plus semantic entity keys, and scene IDs
+from that identity, order, and title.
+
+`DeterministicTimelineAllocator` version `largest-remainder-v1` assigns a
+3-second base, distributes remaining seconds by model weights (or suggestions,
+or evenly when absent), caps at 8 seconds, then assigns remainder seconds by
+descending fractional remainder and scene order. It rejects scene counts
+outside 7–10 and infeasible target durations. Final scene durations are
+integers and total exactly the request target. This adjustment is explicit in
+the persisted timeline provenance.
+
+Verification for this implementation: full pytest **85 passed**; clean and
+existing Alembic databases reached `0010_candidate_timeline_observability`;
+SQLite foreign-key check, Docker Compose configuration, mock-provider API
+smoke, and `git diff --check` passed. No Qwen live, ComfyUI, SDXL, LoRA, video,
+TTS, or subtitle inference was run.
