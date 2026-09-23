@@ -1,10 +1,10 @@
 # Phase 3B — Local Qwen Prompt Planner
 
-Status: **RUNTIME_READY_FOR_LIVE_RETEST**. Two authorized live golden
-compilations failed validation, each after one repair. This checkpoint records
-runtime readiness only; it does not claim `QWEN_PROMPT_PLANNER_READY` or
-`PROMPT_TO_VIDEO_PASS`. Both failed records are preserved. No live inference
-was run for the v3 implementation work.
+Status: **RUNTIME_READY_FOR_LIVE_RETEST_WITH_FAILURE**. The v3 golden
+compilation failed semantic validation after one repair. This checkpoint does
+not claim `QWEN_PROMPT_PLANNER_READY` or `PROMPT_TO_VIDEO_PASS`. All three
+failed records are preserved. No further live compilation is permitted in
+this scope.
 
 ## Scope and API
 
@@ -168,3 +168,36 @@ existing Alembic databases reached `0010_candidate_timeline_observability`;
 SQLite foreign-key check, Docker Compose configuration, mock-provider API
 smoke, and `git diff --check` passed. No Qwen live, ComfyUI, SDXL, LoRA, video,
 TTS, or subtitle inference was run.
+
+## Third authorized golden live compilation — phase3b-v3
+
+On 2026-09-23, exactly one new compilation used the Lesson 08 golden request
+with the `PlannerCandidate` structured schema and `phase3b-v3`. Preflight
+confirmed `qwen3:14b`, digest
+`bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8`, Q4_K_M,
+Apache-2.0, temperature 0, seed 314159, and `keep_alive=0`. `ollama ps` was
+empty, ComfyUI was absent, no LoRA trainer or GPU training worker was active,
+and VRAM was 1308 MiB before inference.
+
+Compilation `5b204f46-21c5-4206-9c8b-c08c2eb66383` ended as
+`COMPILATION_FAILED` after one candidate repair. The persisted record contains
+no `plan_json`, `validation_stage=semantic_validation`, `error_count=1`,
+`failed_scene_orders=[1,2,3,4,5,6,7]`, and candidate response SHA-256
+`8ec926a9072489b62604b10e81f5b215a56acec247a8c6232ad5da0730eac03d`.
+
+The exact validation error is:
+
+```json
+{
+  "loc": ["environments"],
+  "type": "red_river_delta_environment_required",
+  "msg": "Use one shared Northern Vietnam / Red River Delta environment for every scene."
+}
+```
+
+The candidate did not reach timeline allocation, so no duration provenance or
+partial final plan was persisted. Inference latency was 34,641 ms. Resource
+metrics were 1,303 MiB before, 31,144 MiB peak, and 1,292 MiB after unload;
+`unload_verified` and `vram_released` were true. `ollama ps` was empty after
+inference. The v1 and v2 failed rows remain unchanged. No fourth live attempt
+was made.

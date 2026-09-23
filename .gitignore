@@ -36,6 +36,7 @@ user/*
 !user/.gitkeep
 temp/
 data/
+data/diagnostics/
 node_modules/
 dist/
 coverage/
