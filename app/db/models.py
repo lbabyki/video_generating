@@ -292,6 +292,12 @@ class VisualPromptPackage(Base):
     supported_evidence_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     project_design_source_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     excluded_claims: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    style_prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    environment_prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    subject_prompts: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    action_prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    continuity_constraints: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    workflow_metadata: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
 
 
 class GroundingRequirement(Base):

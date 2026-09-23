@@ -143,3 +143,13 @@ Status: `GROUNDING_RESOLVED_VISUAL_PROMPTS_IN_REVIEW`
 - Riverbank EnvironmentBible review is `APPROVED`; all four EnvironmentBibles and both CharacterBibles are approved for this review stage. Cultural review remains `PENDING`.
 - Eight prior v1 prompt packages remain immutable and are `SUPERSEDED`; eight deterministic v2 packages are `ACTIVE`, `DRAFT`, `release_eligible=false`, `keyframe_status=NOT_GENERATED`.
 - VisualBibleSet is `IN_REVIEW`. It is not `APPROVED` or `LOCKED`; prompt-to-image/video/audio generation has not run.
+
+## Phase 3C-C2D — Visual Prompt Semantic QA and Role Scoping
+
+Status: `VISUAL_PROMPT_V3_READY_FOR_HUMAN_REVIEW`
+
+- Character-role audit found the original teacher binding missing. Deterministic DRAFT teacher CharacterBible `c92a7bf1-39c0-5d6d-83c5-159d77a44d96` was added; it was not approved. Scene 3 now binds teacher + student, and Scene 4 binds teacher supervision + student.
+- Student, community adult, and teacher wardrobe instructions are role-scoped. Only the recurring student receives the approved red scarf/white collared shirt/navy trousers/simple shoes design.
+- Eight v2 packages remain preserved as `SUPERSEDED`; eight deterministic v3 packages are `ACTIVE`, `DRAFT`, unreleasable and keyframe-free.
+- v3 packages use structured style/environment/subject/action/composition/camera/lighting/continuity/workflow metadata. Model-facing prompts contain natural-language flat lowland descriptions and no UUIDs.
+- VisualBibleSet remains `IN_REVIEW`; cultural review remains `PENDING`. No CHARACTER_CONSISTENCY_PASS, VISUAL_BIBLE_APPROVED, KEYFRAME_PASS or PROMPT_TO_VIDEO_PASS is claimed.
