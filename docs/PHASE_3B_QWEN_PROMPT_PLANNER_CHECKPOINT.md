@@ -1,10 +1,10 @@
 # Phase 3B — Local Qwen Prompt Planner
 
-Status: **RUNTIME_READY_FOR_LIVE_RETEST_WITH_FAILURE**. The v3 golden
-compilation failed semantic validation after one repair. This checkpoint does
-not claim `QWEN_PROMPT_PLANNER_READY` or `PROMPT_TO_VIDEO_PASS`. All three
-failed records are preserved. No further live compilation is permitted in
-this scope.
+Status: **RUNTIME_READY_FOR_LIVE_RETEST_R2**. The v3 golden compilation
+failed semantic validation after one repair. R2 separates regional profiles
+from scene locations and is verified offline only. This checkpoint does not
+claim `QWEN_PROMPT_PLANNER_READY` or `PROMPT_TO_VIDEO_PASS`. All three failed
+records are preserved. No live inference was run for R2.
 
 ## Scope and API
 
@@ -168,6 +168,40 @@ existing Alembic databases reached `0010_candidate_timeline_observability`;
 SQLite foreign-key check, Docker Compose configuration, mock-provider API
 smoke, and `git diff --check` passed. No Qwen live, ComfyUI, SDXL, LoRA, video,
 TTS, or subtitle inference was run.
+
+## Phase 3B-R2 offline semantic environment model
+
+`RegionalEnvironmentProfile` represents the canonical region once per plan.
+`SceneLocation` represents a specific place such as a rice field, riverbank,
+village lane, communal-house yard, school yard, bamboo hedge, or residential
+area. Each location carries the same regional profile ID while its own UUID5
+location ID may differ. Scene `environment_id` values now resolve to these
+location IDs; no model-provided ID is trusted.
+
+When the request explicitly names Đồng bằng Bắc Bộ, Đồng bằng sông Hồng, or
+Red River Delta, the compiler inherits canonical `red-river-delta` for scenes
+that omit regional text. Equivalent aliases normalize to the same key. The
+provenance records proposed text, canonical key, inheritance, alias
+normalization, conflict, review state, profile ID, and normalization rule
+version. Broad text such as Vietnam alone does not infer the delta.
+
+Explicit high mountains, mountain valleys, stilt-house villages, Tây Bắc,
+Tây Nguyên, or Chinese/Japanese palace architecture are rejected as regional
+conflicts. Ambiguous or unsupported regional claims remain `NEEDS_REVIEW`.
+Compatible scene locations do not trigger semantic repair.
+
+Template default is now `phase3b-v4`; it was not sent to Qwen. Offline fixtures
+were added under `fixtures/phase3b_r2/` for compatible locations, aliases,
+request inheritance, and conflicts. No live IDs, timestamps, latency, VRAM,
+or model response hashes appear in those fixtures.
+
+R2 verification: full pytest **93 passed**, clean and existing Alembic current
+remain `0010_candidate_timeline_observability`, SQLite foreign-key checks are
+clean, mock-provider API smoke passed, Docker Compose configuration passed,
+and `git diff --check` passed. The three historical failed compilation rows
+were read-only compared before and after verification; status, hashes, metrics,
+errors, and `updated_at` were unchanged. No Qwen live, ComfyUI, SDXL, LoRA,
+video, TTS, or subtitle inference was run.
 
 ## Third authorized golden live compilation — phase3b-v3
 

@@ -13,6 +13,8 @@ from app.prompt_compiler import (
     EnvironmentReference,
     ProjectPlan,
     PromptCompilationRequest,
+    RegionalEnvironmentProfile,
+    SceneLocation,
     ScenePlan,
     StrictModel,
     is_historical_content,
@@ -74,6 +76,27 @@ class CandidateSemanticError(ValueError):
         self.failed_scene_orders = sorted(set(failed_scene_orders or []))
 
 
+REGION_NORMALIZATION_RULE_VERSION = "red-river-delta-aliases-v1"
+REGION_ALIASES = {
+    "đồng bằng bắc bộ": "red-river-delta",
+    "đồng bằng sông hồng": "red-river-delta",
+    "red river delta": "red-river-delta",
+    "red-river-delta": "red-river-delta",
+    "red river delta": "red-river-delta",
+}
+CONFLICT_TERMS = {
+    "núi cao": "high_mountains",
+    "thung lũng núi": "mountain_valley",
+    "tây bắc": "wrong_region_northwest",
+    "tây nguyên": "wrong_region_central_highlands",
+    "làng nhà sàn": "stilt_house_village",
+    "cung điện trung quốc": "foreign_palace_chinese",
+    "cung điện nhật bản": "foreign_palace_japanese",
+    "kiến trúc cung điện trung hoa": "foreign_palace_chinese",
+    "kiến trúc cung điện nhật": "foreign_palace_japanese",
+}
+
+
 def safe_pydantic_issues(exc: ValidationError, limit: int = 40) -> list[dict]:
     issues = []
     for item in exc.errors()[:limit]:
@@ -97,6 +120,40 @@ def safe_pydantic_issues(exc: ValidationError, limit: int = 40) -> list[dict]:
 def semantic_key(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value).casefold()
     return re.sub(r"\s+", " ", normalized).strip()
+
+
+def normalize_region_alias(value: str | None) -> str | None:
+    key = semantic_key(value or "")
+    return REGION_ALIASES.get(key)
+
+
+def resolve_regional_context(request: PromptCompilationRequest, candidate: PlannerCandidate) -> tuple[dict, list[dict], list[int]]:
+    request_text = semantic_key(request.prompt)
+    explicit_alias = next((alias for alias in REGION_ALIASES if alias in request_text), None)
+    request_region = REGION_ALIASES.get(explicit_alias) if explicit_alias else None
+    issues: list[dict] = []
+    failed: set[int] = set()
+    proposed_values = [item.region for item in candidate.environments] + [item.subregion for item in candidate.environments]
+    environment_text = " ".join(proposed_values + [item.visual_description for item in candidate.environments] + [scene.visual_description for scene in candidate.scenes]).casefold()
+    conflicts = [kind for term, kind in CONFLICT_TERMS.items() if term in environment_text]
+    if conflicts:
+        issues.append({"loc": ["environments"], "type": "regional_context_conflict", "msg": "Candidate contains explicit geographic or architectural conflict.", "context": {"conflicts": sorted(set(conflicts))}})
+        failed.update(scene.scene_order for scene in candidate.scenes)
+    if request_region is None:
+        explicit_candidate_regions = {normalize_region_alias(value) for value in proposed_values if normalize_region_alias(value)}
+        if not explicit_candidate_regions:
+            return ({"proposed_region_text": explicit_alias, "canonical_region_key": None, "inherited_from_request": False,
+                     "normalized_from_alias": False, "conflict_detected": bool(conflicts), "review_required": True}, issues, sorted(failed))
+        if len(explicit_candidate_regions) > 1:
+            issues.append({"loc": ["environments"], "type": "ambiguous_region", "msg": "Candidate region is ambiguous and cannot be canonicalized."})
+            failed.update(scene.scene_order for scene in candidate.scenes)
+        canonical = next(iter(explicit_candidate_regions))
+        return ({"proposed_region_text": next(iter(explicit_candidate_regions)), "canonical_region_key": canonical,
+                 "inherited_from_request": False, "normalized_from_alias": True, "conflict_detected": bool(conflicts),
+                 "review_required": bool(conflicts)}, issues, sorted(failed))
+    return ({"proposed_region_text": explicit_alias, "canonical_region_key": request_region,
+             "inherited_from_request": True, "normalized_from_alias": explicit_alias != request_region,
+             "conflict_detected": bool(conflicts), "review_required": bool(conflicts)}, issues, sorted(failed))
 
 
 def validate_candidate_semantics(candidate: PlannerCandidate, request: PromptCompilationRequest | None = None) -> tuple[list[dict], list[int]]:
@@ -128,18 +185,15 @@ def validate_candidate_semantics(candidate: PlannerCandidate, request: PromptCom
             issues.append({"loc": ["scenes", scene.scene_order, "environment"], "type": "unknown_environment_reference", "msg": f"Unknown environment reference: {scene.environment[:160]}"})
             failed.add(scene.scene_order)
 
-    is_delta = bool(request and re.search(r"đồng bằng bắc bộ|đồng bằng sông hồng|châu thổ sông hồng", request.prompt, re.I))
-    if is_delta:
-        matching_environments = [environment for environment in candidate.environments if environment.region == "NORTHERN_VIETNAM" and environment.subregion == "RED_RIVER_DELTA"]
-        if len(candidate.environments) != 1 or len(matching_environments) != 1:
-            issues.append({"loc": ["environments"], "type": "red_river_delta_environment_required", "msg": "Use one shared Northern Vietnam / Red River Delta environment for every scene."})
-            failed.update(scene.scene_order for scene in candidate.scenes)
-        for environment in candidate.environments:
-            if environment in matching_environments and environment.terrain.casefold() not in {
-                "flat_alluvial_plain", "flat alluvial plain", "đồng bằng phù sa bằng phẳng",
-            }:
-                issues.append({"loc": ["environments", environment.name, "terrain"], "type": "terrain_not_flat", "msg": "Red River Delta terrain must be flat alluvial plain."})
-                failed.update(scene.scene_order for scene in candidate.scenes if semantic_key(scene.environment) == semantic_key(environment.name))
+    if request:
+        context, context_issues, context_failed = resolve_regional_context(request, candidate)
+        issues.extend(context_issues)
+        failed.update(context_failed)
+        if context["canonical_region_key"] == "red-river-delta":
+            for environment in candidate.environments:
+                if environment.terrain.casefold() not in {"flat_alluvial_plain", "flat alluvial plain", "đồng bằng phù sa bằng phẳng", "flat_delta"}:
+                    issues.append({"loc": ["environments", environment.name, "terrain"], "type": "terrain_not_flat", "msg": "Red River Delta terrain must be flat alluvial plain."})
+                    failed.update(scene.scene_order for scene in candidate.scenes if semantic_key(scene.environment) == semantic_key(environment.name))
     return issues, sorted(failed)
 
 
@@ -152,6 +206,9 @@ class CandidateProjectPlanCompiler:
         issues, failed = validate_candidate_semantics(candidate, request)
         if issues:
             raise CandidateSemanticError(issues, failed)
+        region_provenance, region_issues, region_failed = resolve_regional_context(request, candidate)
+        if region_issues:
+            raise CandidateSemanticError(region_issues, region_failed)
 
         suggestions = [scene.suggested_duration_seconds for scene in candidate.scenes]
         weights = [scene.duration_weight for scene in candidate.scenes]
@@ -160,11 +217,11 @@ class CandidateProjectPlanCompiler:
         characters_by_key = {semantic_key(item.name): item for item in candidate.characters}
         environments_by_key = {semantic_key(item.name): item for item in candidate.environments}
         character_ids = {
-            key: str(uuid5(NAMESPACE_URL, f"phase3b-v3:{identity_basis}:character:{key}"))
+            key: str(uuid5(NAMESPACE_URL, f"phase3b-v4:{identity_basis}:character:{key}"))
             for key in characters_by_key
         }
-        environment_ids = {
-            key: str(uuid5(NAMESPACE_URL, f"phase3b-v3:{identity_basis}:environment:{key}"))
+        location_ids = {
+            key: str(uuid5(NAMESPACE_URL, f"phase3b-v4:{identity_basis}:location:{key}"))
             for key in environments_by_key
         }
         final_characters = [CharacterReference(
@@ -173,25 +230,31 @@ class CandidateProjectPlanCompiler:
             continuity_constraints=item.continuity_constraints, reference_asset_ids=[], review_status="DRAFT",
         ) for key, item in characters_by_key.items()]
 
-        is_delta_request = bool(re.search(r"đồng bằng bắc bộ|đồng bằng sông hồng|châu thổ sông hồng", request.prompt, re.I))
+        is_delta_request = region_provenance.get("canonical_region_key") == "red-river-delta"
         required_forbidden = ["núi cao", "làng nhà sàn", "kiến trúc cung điện Trung Hoa", "kiến trúc cung điện Nhật"] if is_delta_request else []
         final_environments = []
         for key, item in environments_by_key.items():
             forbidden = _unique([*item.negative_constraints, *required_forbidden])
             final_environments.append(EnvironmentReference(
-                environment_id=environment_ids[key], country=item.country, region=item.region,
-                subregion=item.subregion, historical_period=item.historical_period, terrain=item.terrain,
+                environment_id=location_ids[key], country=item.country, region="NORTHERN_VIETNAM" if is_delta_request else item.region,
+                subregion="RED_RIVER_DELTA" if is_delta_request else item.subregion, historical_period=item.historical_period, terrain="FLAT_ALLUVIAL_PLAIN" if is_delta_request else item.terrain,
                 architecture_profile=item.architecture_profile, visual_description=item.visual_description,
                 required_elements=_unique([*item.required_elements, *item.cultural_constraints]), forbidden_elements=forbidden,
                 reference_asset_ids=[], review_status="DRAFT",
             ))
 
+        regional_profile_id = str(uuid5(NAMESPACE_URL, f"phase3b-v4:regional:{region_provenance.get('canonical_region_key')}:{request.requested_cultural_profile or 'v1'}")) if region_provenance.get("canonical_region_key") else None
+        final_locations = []
+        for key, item in environments_by_key.items():
+            final_locations.append(SceneLocation(scene_location_id=location_ids[key], name=item.name,
+                normalized_location_key=key, regional_environment_profile_id=regional_profile_id or "unresolved",
+                review_state="NEEDS_REVIEW" if region_provenance.get("review_required") else "PENDING"))
         final_scenes = []
         timeline_provenance = []
         for index, scene in enumerate(candidate.scenes):
             order = scene.scene_order
             duration = allocation.durations[index]
-            scene_id = str(uuid5(NAMESPACE_URL, f"phase3b-v3:{identity_basis}:scene:{order}:{semantic_key(scene.title)}"))
+            scene_id = str(uuid5(NAMESPACE_URL, f"phase3b-v4:{identity_basis}:scene:{order}:{semantic_key(scene.title)}"))
             env_key = semantic_key(scene.environment)
             env = environments_by_key[env_key]
             characters = _unique(scene.characters)
@@ -200,7 +263,7 @@ class CandidateProjectPlanCompiler:
             final_scenes.append(ScenePlan(
                 scene_id=scene_id, scene_number=order, title=scene.title,
                 duration_seconds=duration, narration_vi=scene.narration_text,
-                learning_purpose=scene.narrative_purpose, environment_id=environment_ids[env_key],
+                learning_purpose=scene.narrative_purpose, environment_id=location_ids[env_key],
                 character_ids=character_refs, visual_action=scene.visual_description,
                 camera_shot=("WIDE", "MEDIUM", "CLOSE_UP", "WIDE")[((order - 1) % 4)],
                 camera_motion="STATIC", motion_description="Chuyển động nhẹ, phù hợp hoạt hình giáo dục.",
@@ -213,7 +276,18 @@ class CandidateProjectPlanCompiler:
             detail["scene_id"] = scene_id
             timeline_provenance.append(detail)
 
-        grounding_status = "NEEDS_REVIEW" if candidate.grounding_status == "NEEDS_REVIEW" or is_historical_content(request.prompt) else "PENDING"
+        grounding_status = "NEEDS_REVIEW" if candidate.grounding_status == "NEEDS_REVIEW" or is_historical_content(request.prompt) or region_provenance.get("review_required") else "PENDING"
+        regional_profile = None
+        if region_provenance.get("canonical_region_key"):
+            regional_profile = RegionalEnvironmentProfile(
+                regional_environment_profile_id=regional_profile_id,
+                canonical_region_key=region_provenance["canonical_region_key"],
+                display_name="Đồng bằng Bắc Bộ" if is_delta_request else region_provenance["canonical_region_key"],
+                country="Vietnam", terrain="flat_delta" if is_delta_request else "UNSPECIFIED",
+                cultural_profile_version=request.requested_cultural_profile or "v1",
+                required_features=["dòng sông", "ruộng lúa"] if is_delta_request else [],
+                forbidden_features=required_forbidden, review_state="NEEDS_REVIEW" if region_provenance.get("review_required") else "PENDING",
+            )
         plan = ProjectPlan(
             compilation_id=compilation_id, title=candidate.title, learning_objective=candidate.learning_objective,
             subject=request.subject, education_level=request.education_level, language=request.language,
@@ -222,12 +296,15 @@ class CandidateProjectPlanCompiler:
             cultural_profile_id=request.requested_cultural_profile or ("red-river-delta-v1" if is_delta_request else None),
             grounding_status=grounding_status, governance_status="DRAFT", release_eligible=False,
             characters=final_characters, environments=final_environments, scenes=final_scenes,
+            regional_environment_profile=regional_profile, scene_locations=final_locations,
         )
         provenance = {
             "allocator_version": allocation.allocator_version,
             "target_duration_seconds": request.target_duration_seconds,
             "adjusted": any(item["adjusted"] for item in timeline_provenance),
             "scenes": timeline_provenance,
+            "regional_context": region_provenance,
+            "regional_environment_profile_id": regional_profile_id,
         }
         return plan, provenance
 

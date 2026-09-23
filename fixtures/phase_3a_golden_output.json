@@ -289,6 +289,34 @@
         "keyframe_status": "NOT_GENERATED",
         "locked": false
       }
+    ],
+    "regional_environment_profile": {
+      "regional_environment_profile_id": "mock-red-river-delta-profile-v1",
+      "canonical_region_key": "red-river-delta",
+      "display_name": "Đồng bằng Bắc Bộ",
+      "country": "Vietnam",
+      "terrain": "flat_delta",
+      "cultural_profile_version": "red-river-delta-v1",
+      "required_features": [
+        "dòng sông",
+        "ruộng lúa"
+      ],
+      "forbidden_features": [
+        "núi cao",
+        "làng nhà sàn",
+        "kiến trúc cung điện Trung Hoa",
+        "kiến trúc cung điện Nhật"
+      ],
+      "review_state": "PENDING"
+    },
+    "scene_locations": [
+      {
+        "scene_location_id": "red-river-delta-rural-v1",
+        "name": "Đồng bằng Bắc Bộ",
+        "normalized_location_key": "đồng bằng bắc bộ",
+        "regional_environment_profile_id": "mock-red-river-delta-profile-v1",
+        "review_state": "PENDING"
+      }
     ]
   },
   "validation_warnings": [

@@ -65,6 +65,48 @@ def test_candidate_resolves_stable_entity_and_scene_ids_and_draft_plan():
     assert provenance["adjusted"] is True
 
 
+def test_seven_compatible_scene_locations_share_one_regional_profile():
+    source = candidate().model_dump(mode="python")
+    locations = ["Ruộng lúa", "Bờ sông", "Đường làng", "Sân đình", "Sân trường", "Hàng tre", "Khu dân cư"]
+    source["environments"] = []
+    source["scenes"] = source["scenes"][:7]
+    for location in locations:
+        source["environments"].append({
+            "name": location, "country": "VIETNAM", "region": "NORTHERN_VIETNAM", "subregion": "RED_RIVER_DELTA",
+            "historical_period": "CONTEMPORARY", "terrain": "FLAT_ALLUVIAL_PLAIN", "architecture_profile": "NORTHERN_VIETNAMESE_RURAL",
+            "visual_description": f"{location} trong vùng đồng bằng phẳng.", "required_elements": [], "cultural_constraints": [], "negative_constraints": [],
+        })
+    for scene, location in zip(source["scenes"], locations):
+        scene["environment"] = location
+    plan, provenance = CandidateProjectPlanCompiler().compile(request(), PlannerCandidate.model_validate(source), "id", "hash")
+    assert len({scene.environment_id for scene in plan.scenes}) == 7
+    assert len({location.scene_location_id for location in plan.scene_locations}) == 7
+    assert {location.regional_environment_profile_id for location in plan.scene_locations} == {plan.regional_environment_profile.regional_environment_profile_id}
+    assert sum(scene.duration_seconds for scene in plan.scenes) == 45
+    assert all(3 <= scene.duration_seconds <= 8 for scene in plan.scenes)
+    assert provenance["regional_context"]["inherited_from_request"] is True
+
+
+@pytest.mark.parametrize("alias", ["Đồng bằng Bắc Bộ", "Đồng bằng sông Hồng", "Red River Delta"])
+def test_equivalent_region_aliases_normalize_to_red_river_delta(alias):
+    source = candidate().model_dump(mode="python")
+    source["environments"][0]["region"] = alias
+    source["environments"][0]["subregion"] = alias
+    req = PromptCompilationRequest.model_validate({**request().model_dump(mode="python"), "prompt": f"Video về {alias} và bảo vệ thiên nhiên."})
+    plan, provenance = CandidateProjectPlanCompiler().compile(req, PlannerCandidate.model_validate(source), "id", "hash")
+    assert plan.regional_environment_profile.canonical_region_key == "red-river-delta"
+    assert provenance["regional_context"]["canonical_region_key"] == "red-river-delta"
+
+
+@pytest.mark.parametrize("conflict", ["núi cao", "làng nhà sàn", "kiến trúc cung điện Trung Hoa", "kiến trúc cung điện Nhật Bản"])
+def test_explicit_environment_conflicts_are_rejected_without_partial_plan(conflict):
+    source = candidate().model_dump(mode="python")
+    source["environments"][0]["visual_description"] += f" Có {conflict}."
+    with pytest.raises(CandidateSemanticError) as caught:
+        CandidateProjectPlanCompiler().compile(request(), PlannerCandidate.model_validate(source), "id", "hash")
+    assert caught.value.issues[0]["type"] in {"regional_context_conflict", "terrain_not_flat"}
+
+
 def test_different_semantic_entities_do_not_merge():
     plan, _ = CandidateProjectPlanCompiler().compile(request(), candidate(), "id", "request-hash")
     assert plan.characters[0].character_id != plan.characters[1].character_id

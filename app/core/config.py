@@ -17,7 +17,7 @@ class Settings:
     ollama_keep_alive: str = os.getenv("OLLAMA_KEEP_ALIVE", "0")
     prompt_planner_temperature: float = float(os.getenv("PROMPT_PLANNER_TEMPERATURE", "0"))
     prompt_planner_seed: int = int(os.getenv("PROMPT_PLANNER_SEED", "314159"))
-    prompt_template_version: str = os.getenv("PROMPT_TEMPLATE_VERSION", "phase3b-v3")
+    prompt_template_version: str = os.getenv("PROMPT_TEMPLATE_VERSION", "phase3b-v4")
     prompt_planner_store_diagnostics: bool = os.getenv("PROMPT_PLANNER_STORE_DIAGNOSTICS", "false").lower() == "true"
     prompt_planner_diagnostics_dir: Path = Path(os.getenv("PROMPT_PLANNER_DIAGNOSTICS_DIR", "data/diagnostics/phase3b"))
     prompt_planner_allow_remote: bool = os.getenv("PROMPT_PLANNER_ALLOW_REMOTE", "false").lower() == "true"

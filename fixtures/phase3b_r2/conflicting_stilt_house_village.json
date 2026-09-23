@@ -1,0 +1,171 @@
+{
+  "title": "Bảo vệ thiên nhiên",
+  "learning_objective": "Học sinh nêu hành động bảo vệ thiên nhiên.",
+  "grounding_status": "PENDING",
+  "characters": [
+    {
+      "name": "Lan",
+      "role": "STUDENT",
+      "age_group": "PRIMARY_SCHOOL",
+      "visual_description": "Học sinh tiểu học.",
+      "clothing_description": "Đồng phục giản dị.",
+      "continuity_constraints": []
+    },
+    {
+      "name": "Minh",
+      "role": "STUDENT",
+      "age_group": "PRIMARY_SCHOOL",
+      "visual_description": "Học sinh tiểu học khác.",
+      "clothing_description": "Đồng phục giản dị.",
+      "continuity_constraints": []
+    }
+  ],
+  "environments": [
+    {
+      "name": "Đồng bằng Bắc Bộ",
+      "country": "VIETNAM",
+      "region": "NORTHERN_VIETNAM",
+      "subregion": "RED_RIVER_DELTA",
+      "historical_period": "CONTEMPORARY",
+      "terrain": "FLAT_ALLUVIAL_PLAIN",
+      "architecture_profile": "NORTHERN_VIETNAMESE_RURAL",
+      "visual_description": "Đồng bằng phẳng, có sông và ruộng lúa. Có làng nhà sàn.",
+      "required_elements": [
+        "dòng sông",
+        "ruộng lúa"
+      ],
+      "cultural_constraints": [],
+      "negative_constraints": []
+    }
+  ],
+  "scenes": [
+    {
+      "scene_order": 1,
+      "title": "Cảnh 1",
+      "narrative_purpose": "Bảo vệ môi trường",
+      "visual_description": "Học sinh cùng người dân chăm sóc dòng sông và ruộng lúa.",
+      "narration_text": "Cùng giữ gìn thiên nhiên quanh ta.",
+      "characters": [
+        "Lan",
+        "Lan"
+      ],
+      "environment": "Đồng bằng Bắc Bộ",
+      "cultural_constraints": [],
+      "negative_constraints": [],
+      "suggested_duration_seconds": 5.5,
+      "duration_weight": null
+    },
+    {
+      "scene_order": 2,
+      "title": "Cảnh 2",
+      "narrative_purpose": "Bảo vệ môi trường",
+      "visual_description": "Học sinh cùng người dân chăm sóc dòng sông và ruộng lúa.",
+      "narration_text": "Cùng giữ gìn thiên nhiên quanh ta.",
+      "characters": [
+        "Lan",
+        "Lan"
+      ],
+      "environment": "Đồng bằng Bắc Bộ",
+      "cultural_constraints": [],
+      "negative_constraints": [],
+      "suggested_duration_seconds": 5.5,
+      "duration_weight": null
+    },
+    {
+      "scene_order": 3,
+      "title": "Cảnh 3",
+      "narrative_purpose": "Bảo vệ môi trường",
+      "visual_description": "Học sinh cùng người dân chăm sóc dòng sông và ruộng lúa.",
+      "narration_text": "Cùng giữ gìn thiên nhiên quanh ta.",
+      "characters": [
+        "Lan",
+        "Lan"
+      ],
+      "environment": "Đồng bằng Bắc Bộ",
+      "cultural_constraints": [],
+      "negative_constraints": [],
+      "suggested_duration_seconds": 5.5,
+      "duration_weight": null
+    },
+    {
+      "scene_order": 4,
+      "title": "Cảnh 4",
+      "narrative_purpose": "Bảo vệ môi trường",
+      "visual_description": "Học sinh cùng người dân chăm sóc dòng sông và ruộng lúa.",
+      "narration_text": "Cùng giữ gìn thiên nhiên quanh ta.",
+      "characters": [
+        "Lan",
+        "Lan"
+      ],
+      "environment": "Đồng bằng Bắc Bộ",
+      "cultural_constraints": [],
+      "negative_constraints": [],
+      "suggested_duration_seconds": 5.5,
+      "duration_weight": null
+    },
+    {
+      "scene_order": 5,
+      "title": "Cảnh 5",
+      "narrative_purpose": "Bảo vệ môi trường",
+      "visual_description": "Học sinh cùng người dân chăm sóc dòng sông và ruộng lúa.",
+      "narration_text": "Cùng giữ gìn thiên nhiên quanh ta.",
+      "characters": [
+        "Lan",
+        "Lan"
+      ],
+      "environment": "Đồng bằng Bắc Bộ",
+      "cultural_constraints": [],
+      "negative_constraints": [],
+      "suggested_duration_seconds": 5.5,
+      "duration_weight": null
+    },
+    {
+      "scene_order": 6,
+      "title": "Cảnh 6",
+      "narrative_purpose": "Bảo vệ môi trường",
+      "visual_description": "Học sinh cùng người dân chăm sóc dòng sông và ruộng lúa.",
+      "narration_text": "Cùng giữ gìn thiên nhiên quanh ta.",
+      "characters": [
+        "Lan",
+        "Lan"
+      ],
+      "environment": "Đồng bằng Bắc Bộ",
+      "cultural_constraints": [],
+      "negative_constraints": [],
+      "suggested_duration_seconds": 5.5,
+      "duration_weight": null
+    },
+    {
+      "scene_order": 7,
+      "title": "Cảnh 7",
+      "narrative_purpose": "Bảo vệ môi trường",
+      "visual_description": "Học sinh cùng người dân chăm sóc dòng sông và ruộng lúa.",
+      "narration_text": "Cùng giữ gìn thiên nhiên quanh ta.",
+      "characters": [
+        "Lan",
+        "Lan"
+      ],
+      "environment": "Đồng bằng Bắc Bộ",
+      "cultural_constraints": [],
+      "negative_constraints": [],
+      "suggested_duration_seconds": 5.5,
+      "duration_weight": null
+    },
+    {
+      "scene_order": 8,
+      "title": "Cảnh 8",
+      "narrative_purpose": "Bảo vệ môi trường",
+      "visual_description": "Học sinh cùng người dân chăm sóc dòng sông và ruộng lúa.",
+      "narration_text": "Cùng giữ gìn thiên nhiên quanh ta.",
+      "characters": [
+        "Lan",
+        "Minh"
+      ],
+      "environment": "Đồng bằng Bắc Bộ",
+      "cultural_constraints": [],
+      "negative_constraints": [],
+      "suggested_duration_seconds": 5.5,
+      "duration_weight": null
+    }
+  ]
+}

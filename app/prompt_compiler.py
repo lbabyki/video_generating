@@ -91,6 +91,26 @@ class EnvironmentReference(StrictModel):
     review_status: Literal["DRAFT"] = "DRAFT"
 
 
+class RegionalEnvironmentProfile(StrictModel):
+    regional_environment_profile_id: str
+    canonical_region_key: str
+    display_name: str
+    country: str
+    terrain: str
+    cultural_profile_version: str
+    required_features: list[str] = Field(default_factory=list)
+    forbidden_features: list[str] = Field(default_factory=list)
+    review_state: Literal["DRAFT", "PENDING", "NEEDS_REVIEW"] = "PENDING"
+
+
+class SceneLocation(StrictModel):
+    scene_location_id: str
+    name: str
+    normalized_location_key: str
+    regional_environment_profile_id: str
+    review_state: Literal["DRAFT", "PENDING", "NEEDS_REVIEW"] = "PENDING"
+
+
 class ScenePlan(StrictModel):
     scene_id: str
     scene_number: int = Field(ge=1)
@@ -145,6 +165,8 @@ class ProjectPlan(StrictModel):
     characters: list[CharacterReference]
     environments: list[EnvironmentReference]
     scenes: list[ScenePlan]
+    regional_environment_profile: RegionalEnvironmentProfile | None = None
+    scene_locations: list[SceneLocation] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_references_and_scene_sequence(self):
@@ -157,10 +179,17 @@ class ProjectPlan(StrictModel):
             raise ValueError("scene_number values must be unique, continuous, and ordered")
         character_ids = {c.character_id for c in self.characters}
         environment_ids = {e.environment_id for e in self.environments}
+        location_ids = {location.scene_location_id for location in self.scene_locations}
         if len(character_ids) != len(self.characters):
             raise ValueError("character_id values must be unique")
         if len(environment_ids) != len(self.environments):
             raise ValueError("environment_id values must be unique")
+        if len(location_ids) != len(self.scene_locations):
+            raise ValueError("scene_location_id values must be unique")
+        if self.regional_environment_profile:
+            profile_id = self.regional_environment_profile.regional_environment_profile_id
+            if any(location.regional_environment_profile_id != profile_id for location in self.scene_locations):
+                raise ValueError("all scene locations must reference the regional environment profile")
         scene_ids = [s.scene_id for s in self.scenes]
         if len(set(scene_ids)) != len(scene_ids):
             raise ValueError("scene_id values must be unique")
@@ -213,12 +242,13 @@ def validate_compiled_plan(request: PromptCompilationRequest, plan: ProjectPlan)
             if any(not 3 <= scene.duration_seconds <= 8 for scene in plan.scenes):
                 errors.append("45-second Red River Delta scenes must each be 3–8 seconds")
         delta_envs = [env for env in plan.environments if env.region == "NORTHERN_VIETNAM" and env.subregion == "RED_RIVER_DELTA"]
+        profile = plan.regional_environment_profile
+        if profile is None or profile.canonical_region_key != "red-river-delta":
+            errors.append("specific Red River Delta request requires canonical regional environment profile")
         if not delta_envs:
-            errors.append("specific Red River Delta request requires a grounded regional environment profile")
+            errors.append("specific Red River Delta request requires compatible scene environments")
         else:
-            if len(delta_envs) != 1 or len(plan.environments) != 1 or any(scene.environment_id != delta_envs[0].environment_id for scene in plan.scenes):
-                errors.append("Red River Delta scenes must reuse one stable environment ID")
-            if delta_envs[0].terrain.casefold() not in {"flat_alluvial_plain", "flat alluvial plain", "alluvial plain, flat"}:
+            if any(env.terrain.casefold() not in {"flat_alluvial_plain", "flat alluvial plain", "alluvial plain, flat", "flat_delta"} for env in delta_envs):
                 errors.append("Red River Delta terrain must be FLAT_ALLUVIAL_PLAIN")
             required_forbidden = {"núi cao", "làng nhà sàn", "kiến trúc cung điện trung hoa", "kiến trúc cung điện nhật"}
             for environment in delta_envs:
@@ -226,6 +256,11 @@ def validate_compiled_plan(request: PromptCompilationRequest, plan: ProjectPlan)
                 if not required_forbidden <= forbidden:
                     errors.append("Red River Delta environment omits required forbidden visual patterns")
                     break
+            location_ids = {location.scene_location_id for location in plan.scene_locations}
+            if not plan.scene_locations or any(scene.environment_id not in {env.environment_id for env in delta_envs} for scene in plan.scenes):
+                errors.append("Red River Delta scenes require compatible scene locations")
+            if profile and any(location.regional_environment_profile_id != profile.regional_environment_profile_id for location in plan.scene_locations):
+                errors.append("scene locations must inherit the canonical regional environment profile")
             if len({character.character_id for character in plan.characters if sum(character.character_id in scene.character_ids for scene in plan.scenes) >= 2}) < 1:
                 errors.append("at least one stable character ID must be reused across scenes")
         if request.requested_cultural_profile and plan.cultural_profile_id != request.requested_cultural_profile:
@@ -358,7 +393,16 @@ class DeterministicMockPromptPlanner:
                 clothing_description="Đồng phục học sinh phổ thông, màu sắc giản dị.", continuity_constraints=["Giữ nguyên kiểu tóc và trang phục giữa các cảnh."]),
                 CharacterReference(character_id="community-member-v1", name="Người dân", role="COMMUNITY_MEMBER", age_group="ADULT",
                 visual_description="Người dân địa phương đương đại, diện mạo thân thiện và đa dạng.", clothing_description="Trang phục sinh hoạt hiện đại, kín đáo, phù hợp hoạt động ngoài trời.")],
-            environments=[env], scenes=scenes)
+            environments=[env], scenes=scenes,
+            regional_environment_profile=(RegionalEnvironmentProfile(
+                regional_environment_profile_id="mock-red-river-delta-profile-v1", canonical_region_key="red-river-delta",
+                display_name="Đồng bằng Bắc Bộ", country="Vietnam", terrain="flat_delta",
+                cultural_profile_version=cultural_id or "v1", required_features=["dòng sông", "ruộng lúa"],
+                forbidden_features=env.forbidden_elements, review_state="NEEDS_REVIEW" if grounding == "NEEDS_REVIEW" else "PENDING"
+            ) if regional else None),
+            scene_locations=([SceneLocation(scene_location_id=env.environment_id, name="Đồng bằng Bắc Bộ",
+                normalized_location_key="đồng bằng bắc bộ", regional_environment_profile_id="mock-red-river-delta-profile-v1",
+                review_state="NEEDS_REVIEW" if grounding == "NEEDS_REVIEW" else "PENDING")] if regional else []))
         return plan
 
 

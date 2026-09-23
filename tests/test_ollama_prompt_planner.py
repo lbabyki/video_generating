@@ -169,7 +169,7 @@ def test_suggested_duration_is_not_final_timeline_and_template_is_versioned():
     capture = []
     planner = make_planner(ollama_handler_for(candidate, capture=capture))
     plan = planner.compile(request, "duration-allocation")
-    assert planner.version.endswith("+phase3b-v3")
+    assert planner.version.endswith("+phase3b-v4")
     assert len(capture) == 2  # one generation plus keep_alive=0 unload
     assert "preferences only" in capture[0]["system"]
     assert plan.scenes[0].duration_seconds <= 8
