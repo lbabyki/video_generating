@@ -300,6 +300,7 @@ class GroundingRequirement(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
     source_reference_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    needs_more_evidence: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class EvidenceLink(Base):

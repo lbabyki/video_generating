@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import APIError
 from app.api.prompt_compilations import get_db
 from app.db.models import ReferenceSource
-from app.grounding import register_local, add_evidence, review_evidence, grounding_view, save_review
+from app.grounding import register_local, register_url_metadata, add_evidence, review_evidence, grounding_view, save_review
 from app.visual_bibles import VisualBibleService, bible_response
 
 router=APIRouter(tags=["grounding"])
@@ -21,6 +21,11 @@ def get_source(source_id: str, db: Session=Depends(get_db)):
     source=db.get(ReferenceSource,source_id)
     if not source: raise APIError("NOT_FOUND","Source not found",404)
     return safe_source(source)
+
+@router.post("/grounding/sources/register-url-metadata")
+def register_url(payload: dict, db: Session=Depends(get_db)):
+    try: return safe_source(register_url_metadata(db,payload))
+    except ValueError as exc: raise APIError("INVALID_SOURCE",str(exc),422) from exc
 
 @router.post("/grounding/requirements/{requirement_id}/evidence")
 def create_evidence(requirement_id: str,payload: dict,db: Session=Depends(get_db)):

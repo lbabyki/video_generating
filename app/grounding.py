@@ -28,10 +28,11 @@ def training_allowed(source: ReferenceSource) -> bool:
 def _audit(db, bible, action, actor=None, details=None):
     db.add(VisualBibleAudit(id=str(uuid4()), bible_set_id=bible.id, action=action, actor_id=actor, details_json=json.dumps(details or {}, ensure_ascii=False)))
 
-def _invalidate(db, bible, action, actor=None):
+def _invalidate(db, bible, action, actor=None, *, invalidate_packages=True):
     if bible.status == "LOCKED": raise ValueError("LOCKED bible sets are immutable")
     if bible.status in {"APPROVED", "IN_REVIEW"}: bible.status = "DRAFT"
-    for package in db.scalars(select(VisualPromptPackage).where(VisualPromptPackage.bible_set_id == bible.id)): package.valid = False
+    if invalidate_packages:
+        for package in db.scalars(select(VisualPromptPackage).where(VisualPromptPackage.bible_set_id == bible.id)): package.valid = False
     _audit(db, bible, action, actor)
 
 def register_local(db: Session, payload: dict) -> ReferenceSource:
@@ -56,6 +57,16 @@ def register_local(db: Session, payload: dict) -> ReferenceSource:
     if source.source_type not in SOURCE_TYPES or source.usage_permission not in PERMISSIONS: raise ValueError("invalid source category or usage permission")
     db.add(source); db.commit(); db.refresh(source); return source
 
+def register_url_metadata(db: Session, payload: dict) -> ReferenceSource:
+    """Register URL provenance only; never fetches the remote URL."""
+    url = (payload.get("canonical_url") or "").strip()
+    if not url.startswith(("https://", "http://")): raise ValueError("canonical_url must be an HTTP(S) URL")
+    if payload.get("source_type") not in SOURCE_TYPES or payload.get("usage_permission") not in PERMISSIONS: raise ValueError("invalid source category or usage permission")
+    existing = db.scalar(select(ReferenceSource).where(ReferenceSource.canonical_url == url))
+    if existing: return existing
+    source = ReferenceSource(id=str(uuid5(NAMESPACE_URL, f"reference-url:{url}")), title=payload["title"], source_url=url, provenance=json.dumps({"remote_metadata_only": True}), license=payload.get("license", "UNKNOWN"), organization=payload.get("organization"), source_type=payload["source_type"], local_file_path=None, canonical_url=url, publication_date=payload.get("publication_date"), access_date=payload.get("access_date") or datetime.now(UTC).date().isoformat(), page_or_section=payload.get("page_or_section"), sha256=None, mime_type=None, usage_permission=payload["usage_permission"], attribution=payload.get("attribution"), notes=payload.get("notes"), review_status="PENDING")
+    db.add(source); db.commit(); db.refresh(source); return source
+
 def add_evidence(db: Session, requirement_id: str, payload: dict) -> EvidenceLink:
     requirement = db.get(GroundingRequirement, requirement_id)
     source = db.get(ReferenceSource, payload.get("source_id"))
@@ -67,7 +78,7 @@ def add_evidence(db: Session, requirement_id: str, payload: dict) -> EvidenceLin
     bible = db.get(VisualBibleSet, requirement.bible_set_id)
     if bible.status == "LOCKED": raise ValueError("LOCKED bible sets are immutable")
     link = EvidenceLink(id=str(uuid4()), grounding_requirement_id=requirement_id, source_id=source.id, page_or_section=page, evidence_summary=summary, supported_claim=payload.get("supported_claim", requirement.claim), notes=payload.get("notes"), review_status="PENDING")
-    db.add(link); _invalidate(db,bible,"EVIDENCE_ADDED"); db.commit(); db.refresh(link); return link
+    db.add(link); _invalidate(db,bible,"EVIDENCE_ADDED", invalidate_packages=False); db.commit(); db.refresh(link); return link
 
 def review_evidence(db: Session, evidence_id: str, payload: dict) -> EvidenceLink:
     link=db.get(EvidenceLink,evidence_id); source=db.get(ReferenceSource,link.source_id) if link else None
@@ -79,9 +90,14 @@ def review_evidence(db: Session, evidence_id: str, payload: dict) -> EvidenceLin
     if bible.status == "LOCKED": raise ValueError("LOCKED bible sets are immutable")
     link.review_status=status; link.reviewer_id=reviewer.id; link.reviewed_at=datetime.now(UTC); link.notes=payload.get("notes")
     links=db.scalars(select(EvidenceLink).where(EvidenceLink.grounding_requirement_id==req.id)).all()
-    if status == "SUPPORTED" and source.usage_permission != "BLOCKED" and any(x.review_status=="SUPPORTED" for x in links): req.status="SUPPORTED"; req.review_required=False
-    elif status in {"REJECTED","BLOCKED"}: req.status=status; req.review_required=True
-    _invalidate(db,bible,"EVIDENCE_REVIEWED",payload["reviewer_id"]); db.commit(); db.refresh(link); return link
+    if status == "SUPPORTED" and source.usage_permission != "BLOCKED" and any(x.review_status=="SUPPORTED" for x in links):
+        if any(x.review_status == "PENDING" for x in links):
+            req.status="PENDING"; req.review_required=True
+        else:
+            req.status="SUPPORTED"; req.review_required=False; req.needs_more_evidence=False
+    elif status == "PARTIALLY_SUPPORTED": req.status="PENDING"; req.review_required=True; req.needs_more_evidence=True
+    elif status in {"REJECTED","BLOCKED"}: req.status=status; req.review_required=True; req.needs_more_evidence=True
+    _invalidate(db,bible,"EVIDENCE_REVIEWED",reviewer.id, invalidate_packages=False); db.commit(); db.refresh(link); return link
 
 def save_review(db: Session, bible_id: str, target_type: str, target_id: str, payload: dict) -> VisualBibleReview:
     bible=db.get(VisualBibleSet,bible_id)
@@ -107,4 +123,4 @@ def grounding_view(db: Session, bible_id: str) -> dict:
     reqs=db.scalars(select(GroundingRequirement).where(GroundingRequirement.bible_set_id==bible_id)).all()
     evid=[]
     for req in reqs: evid.extend(db.scalars(select(EvidenceLink).where(EvidenceLink.grounding_requirement_id==req.id)).all())
-    return {"bible_set_id":bible_id,"requirements":[{"id":r.id,"claim":r.claim,"status":r.status,"review_required":r.review_required} for r in reqs],"evidence":[{"id":e.id,"grounding_requirement_id":e.grounding_requirement_id,"source_id":e.source_id,"page_or_section":e.page_or_section,"evidence_summary":e.evidence_summary,"review_status":e.review_status,"reviewer_id":e.reviewer_id} for e in evid]}
+    return {"bible_set_id":bible_id,"requirements":[{"id":r.id,"claim":r.claim,"status":r.status,"review_required":r.review_required,"needs_more_evidence":r.needs_more_evidence} for r in reqs],"evidence":[{"id":e.id,"grounding_requirement_id":e.grounding_requirement_id,"source_id":e.source_id,"page_or_section":e.page_or_section,"evidence_summary":e.evidence_summary,"review_status":e.review_status,"reviewer_id":e.reviewer_id} for e in evid]}
