@@ -16,6 +16,31 @@ FORBIDDEN = ["high mountains", "mountain valley", "stilt-house village", "Tây B
              "Chinese/Japanese palace architecture", "fake text", "watermark", "unrequested modern foreign landmark"]
 PACKAGE_VERSION = "visual-prompt-package-v1"
 
+def select_runtime_package(db: Session, scene_id: str) -> VisualPromptPackage | None:
+    """Return the sole runtime package for a scene, never from a DRAFT Bible."""
+    rows = list(db.scalars(select(VisualPromptPackage).join(VisualBibleSet, VisualPromptPackage.bible_set_id == VisualBibleSet.id).where(
+        VisualPromptPackage.scene_id == scene_id,
+        VisualPromptPackage.runtime_selectable.is_(True),
+        VisualPromptPackage.activation_status == "ACTIVE",
+        VisualPromptPackage.valid.is_(True),
+        VisualBibleSet.status.in_(["APPROVED", "LOCKED"]),
+    )))
+    if len(rows) > 1:
+        raise ValueError(f"duplicate runtime-selectable packages for scene {scene_id}")
+    return rows[0] if rows else None
+
+def activate_runtime_package(db: Session, package_id: str) -> VisualPromptPackage:
+    """Atomically promote one package and clear other selectable packages for its scene."""
+    package = db.get(VisualPromptPackage, package_id)
+    if package is None: raise ValueError("package not found")
+    bible = db.get(VisualBibleSet, package.bible_set_id)
+    if bible is None or bible.status not in {"APPROVED", "LOCKED"} or package.governance_status != "APPROVED" or not package.release_eligible or not package.valid:
+        raise ValueError("package is not eligible for runtime activation")
+    for other in db.scalars(select(VisualPromptPackage).where(VisualPromptPackage.scene_id == package.scene_id, VisualPromptPackage.runtime_selectable.is_(True))):
+        other.runtime_selectable = False; other.activation_status = "SUPERSEDED"
+    package.runtime_selectable = True; package.activation_status = "ACTIVE"
+    db.commit(); db.refresh(package); return package
+
 def _hash(value) -> str:
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
