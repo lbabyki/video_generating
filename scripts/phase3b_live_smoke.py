@@ -21,6 +21,8 @@ from app.prompt_compiler import PromptCompilationRequest, ProjectPlan, request_d
 FAILED_COMPILATION_IDS = {
     "939d36fc-2756-4743-8ce1-76aeabdec6b9",
     "7e9977ae-ac24-438f-bcd9-fd00e8f8011f",
+    "5b204f46-21c5-4206-9c8b-c08c2eb66383",
+    "bf048455-a69e-40df-a9db-091acbd18f93",
 }
 EXPECTED_DIGEST = "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8"
 
@@ -35,7 +37,7 @@ def main() -> int:
         identity = planner.identity()
         if (settings.ollama_model != "qwen3:14b" or identity.get("resolved_digest", "").removeprefix("sha256:") != EXPECTED_DIGEST
                 or identity.get("quantization") != "Q4_K_M" or identity.get("license") != "Apache-2.0"
-                or identity.get("template_version") != "phase3b-v4" or settings.prompt_planner_temperature != 0
+                or identity.get("template_version") != "phase3b-v5" or settings.prompt_planner_temperature != 0
                 or settings.prompt_planner_seed != 314159 or settings.ollama_keep_alive not in {"0", "0s"}):
             print("FAIL: model, digest, quantization, license, template, temperature, seed, or keep_alive does not match the approved live run", file=sys.stderr)
             return 2

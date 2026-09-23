@@ -1,10 +1,9 @@
 # Phase 3B — Local Qwen Prompt Planner
 
-Status: **RUNTIME_READY_FOR_LIVE_RETEST_R2_WITH_FAILURE**. The phase3b-v4
-golden compilation failed semantic validation after one repair. R2 separates
-regional profiles from scene locations. This checkpoint does not claim
-`QWEN_PROMPT_PLANNER_READY` or `PROMPT_TO_VIDEO_PASS`. All four failed records
-are preserved, and no additional live inference is permitted in this scope.
+Status: **RUNTIME_READY_FOR_LIVE_RETEST_R3**. Phase 3B-R3 adds deterministic
+terrain resolution after the phase3b-v4 semantic failure. This checkpoint does
+not claim `QWEN_PROMPT_PLANNER_READY` or `PROMPT_TO_VIDEO_PASS`. All four
+failed records are preserved, and no live inference was run in R3.
 
 ## Scope and API
 
@@ -272,3 +271,40 @@ read-only compared and remain unchanged. No additional live compilation was
 made. The checkpoint therefore remains
 `RUNTIME_READY_FOR_LIVE_RETEST_R2_WITH_FAILURE`; it does not claim
 `QWEN_PROMPT_PLANNER_READY` and is not a `PROMPT_TO_VIDEO_PASS`.
+
+## Phase 3B-R3 terrain resolution
+
+No Qwen, ComfyUI, SDXL, LoRA, video, TTS, or subtitle inference was run.
+The existing diagnostic for compilation
+`bf048455-a69e-40df-a9db-091acbd18f93` was analyzed as filtered candidate JSON
+only. The raw terrain proposals were:
+
+| Environment | Raw terrain | Classification | Resolution |
+|---|---|---|---|
+| Ruộng lúa Đồng bằng Bắc Bộ | `Đồng bằng phẳng, có dòng sông lớn chảy qua` | `COMPATIBLE` | `flat_delta` from regional profile |
+| Bờ sông | `Bờ sông bằng phẳng, có cây cối ven bờ` | `LOCATION_OR_LAND_USE` | `flat_delta` inherited; field misclassified |
+| Vườn cây cộng đồng | `Đất bằng phẳng, có nhiều cây xanh` | `COMPATIBLE` | `flat_delta` from regional profile |
+
+`TerrainResolver` version `terrain-normalization-v1` now treats the regional
+profile as the final terrain authority. Compatible aliases normalize to
+`flat_delta`; location or land-use values inherit the profile and are marked
+`model_field_misclassified`; missing values inherit without repair; ambiguous
+non-conflicting values inherit with `review_required=true`; explicit mountain,
+highland, plateau, Tây Bắc, or Tây Nguyên values remain conflicts and are
+rejected. Each environment receives sanitized terrain provenance containing the
+raw proposal, classification, resolved terrain, resolution source, inheritance,
+misclassification, rule version, conflict, and review flags.
+
+The new template is `phase3b-v5`. Its instruction places location terms in the
+location field, requests `flat_delta`, forbids model UUIDs, and preserves
+`PENDING`/`NEEDS_REVIEW` governance. A minimal regression fixture is stored at
+`fixtures/phase3b_r3/terrain_resolution_regression.json`; it contains only the
+three environment names and terrain values and no prompt, IDs, timestamps,
+hashes, paths, or reasoning.
+
+R3 verification: full pytest **122 passed**, mock-provider API tests passed,
+Alembic clean/current reached `0010_candidate_timeline_observability`, SQLite
+foreign-key checks are clean, Docker Compose configuration passed, and
+`git diff --check` passed. The four failed compilation rows were read-only
+compared and remain unchanged. No migration was required and no commit or push
+was made.
