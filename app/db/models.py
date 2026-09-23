@@ -162,3 +162,128 @@ class PromptModelProvenance(Base):
     license: Mapped[str] = mapped_column(String(80), nullable=False)
     installed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     prompt_template_version: Mapped[str] = mapped_column(String(80), nullable=False)
+
+
+class VisualBibleSet(Base):
+    __tablename__ = "visual_bible_sets"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    compilation_id: Mapped[str] = mapped_column(ForeignKey("prompt_compilations.id"), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="DRAFT")
+    source_plan_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    cultural_profile_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    cultural_profile_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (UniqueConstraint("compilation_id", "version", name="uq_visual_bible_compilation_version"),)
+
+
+class CharacterBible(Base):
+    __tablename__ = "character_bibles"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    bible_set_id: Mapped[str] = mapped_column(ForeignKey("visual_bible_sets.id", ondelete="CASCADE"), nullable=False)
+    character_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    semantic_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(240), nullable=False)
+    role: Mapped[str] = mapped_column(Text, nullable=False)
+    age_band: Mapped[str] = mapped_column(String(120), nullable=False)
+    gender_presentation: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    body_proportion_style: Mapped[str] = mapped_column(Text, nullable=False)
+    face_description: Mapped[str] = mapped_column(Text, nullable=False)
+    hairstyle: Mapped[str] = mapped_column(Text, nullable=False)
+    wardrobe: Mapped[str] = mapped_column(Text, nullable=False)
+    footwear: Mapped[str] = mapped_column(Text, nullable=False)
+    accessories: Mapped[str] = mapped_column(Text, nullable=False)
+    primary_palette: Mapped[str] = mapped_column(Text, nullable=False)
+    secondary_palette: Mapped[str] = mapped_column(Text, nullable=False)
+    expression_range: Mapped[str] = mapped_column(Text, nullable=False)
+    pose_guidance: Mapped[str] = mapped_column(Text, nullable=False)
+    cultural_notes: Mapped[str] = mapped_column(Text, nullable=False)
+    forbidden_variations: Mapped[str] = mapped_column(Text, nullable=False)
+    reference_asset_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    review_status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
+    provenance: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+
+
+class EnvironmentBible(Base):
+    __tablename__ = "environment_bibles"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    bible_set_id: Mapped[str] = mapped_column(ForeignKey("visual_bible_sets.id", ondelete="CASCADE"), nullable=False)
+    environment_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    canonical_name: Mapped[str] = mapped_column(String(240), nullable=False)
+    regional_profile_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    terrain: Mapped[str] = mapped_column(String(120), nullable=False)
+    architecture_guidance: Mapped[str] = mapped_column(Text, nullable=False)
+    vegetation_guidance: Mapped[str] = mapped_column(Text, nullable=False)
+    water_features: Mapped[str] = mapped_column(Text, nullable=False)
+    road_path_guidance: Mapped[str] = mapped_column(Text, nullable=False)
+    season: Mapped[str] = mapped_column(String(120), nullable=False)
+    weather: Mapped[str] = mapped_column(String(240), nullable=False)
+    time_of_day_options: Mapped[str] = mapped_column(Text, nullable=False)
+    lighting: Mapped[str] = mapped_column(Text, nullable=False)
+    visual_palette: Mapped[str] = mapped_column(Text, nullable=False)
+    cultural_notes: Mapped[str] = mapped_column(Text, nullable=False)
+    required_features: Mapped[str] = mapped_column(Text, nullable=False)
+    forbidden_features: Mapped[str] = mapped_column(Text, nullable=False)
+    grounding_status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
+    review_status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
+    provenance: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    reference_asset_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+
+
+class SceneVisualBinding(Base):
+    __tablename__ = "scene_visual_bindings"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    bible_set_id: Mapped[str] = mapped_column(ForeignKey("visual_bible_sets.id", ondelete="CASCADE"), nullable=False)
+    scene_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    character_ids: Mapped[str] = mapped_column(Text, nullable=False)
+    location_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    regional_profile_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    character_bible_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    environment_bible_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    visual_style_profile_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    cultural_profile_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    grounding_status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
+    source_plan_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    binding_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class VisualPromptPackage(Base):
+    __tablename__ = "visual_prompt_packages"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    bible_set_id: Mapped[str] = mapped_column(ForeignKey("visual_bible_sets.id", ondelete="CASCADE"), nullable=False)
+    scene_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    positive_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    negative_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    character_tokens: Mapped[str] = mapped_column(Text, nullable=False)
+    environment_tokens: Mapped[str] = mapped_column(Text, nullable=False)
+    composition: Mapped[str] = mapped_column(Text, nullable=False)
+    camera_framing: Mapped[str] = mapped_column(String(40), nullable=False)
+    lighting: Mapped[str] = mapped_column(Text, nullable=False)
+    color_palette: Mapped[str] = mapped_column(Text, nullable=False)
+    required_cultural_features: Mapped[str] = mapped_column(Text, nullable=False)
+    forbidden_features: Mapped[str] = mapped_column(Text, nullable=False)
+    base_model_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    base_model_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    intended_style_lora_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    seed_placeholder: Mapped[str] = mapped_column(String(80), nullable=False, default="UNASSIGNED")
+    package_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    package_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    governance_status: Mapped[str] = mapped_column(String(16), nullable=False, default="DRAFT")
+    release_eligible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    keyframe_status: Mapped[str] = mapped_column(String(32), nullable=False, default="NOT_GENERATED")
+    valid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class GroundingRequirement(Base):
+    __tablename__ = "grounding_requirements"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    bible_set_id: Mapped[str] = mapped_column(ForeignKey("visual_bible_sets.id", ondelete="CASCADE"), nullable=False)
+    scope_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    scope_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    claim: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
+    source_reference_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
