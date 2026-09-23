@@ -1,10 +1,10 @@
 # Phase 3B — Local Qwen Prompt Planner
 
-Status: **RUNTIME_READY_FOR_LIVE_RETEST_R2**. The v3 golden compilation
-failed semantic validation after one repair. R2 separates regional profiles
-from scene locations and is verified offline only. This checkpoint does not
-claim `QWEN_PROMPT_PLANNER_READY` or `PROMPT_TO_VIDEO_PASS`. All three failed
-records are preserved. No live inference was run for R2.
+Status: **RUNTIME_READY_FOR_LIVE_RETEST_R2_WITH_FAILURE**. The phase3b-v4
+golden compilation failed semantic validation after one repair. R2 separates
+regional profiles from scene locations. This checkpoint does not claim
+`QWEN_PROMPT_PLANNER_READY` or `PROMPT_TO_VIDEO_PASS`. All four failed records
+are preserved, and no additional live inference is permitted in this scope.
 
 ## Scope and API
 
@@ -235,3 +235,40 @@ metrics were 1,303 MiB before, 31,144 MiB peak, and 1,292 MiB after unload;
 `unload_verified` and `vram_released` were true. `ollama ps` was empty after
 inference. The v1 and v2 failed rows remain unchanged. No fourth live attempt
 was made.
+
+## Phase 3B-R2 authorized golden live compilation — phase3b-v4
+
+On 2026-09-23, exactly one new live compilation used the Lesson 08 golden
+request with template `phase3b-v4`. Preflight confirmed an empty `ollama ps`,
+no ComfyUI, LoRA trainer, or GPU worker, and the exact `qwen3:14b` model
+provenance: digest `bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8`,
+Q4_K_M, Apache-2.0. Temperature was 0, seed 314159, and `keep_alive=0`.
+Local diagnostic storage was enabled; its output is Git-ignored, mode 0600,
+7,174 bytes, and contains only filtered candidate content (no
+thinking/reasoning).
+
+Compilation `bf048455-a69e-40df-a9db-091acbd18f93` ended as
+`COMPILATION_FAILED` after exactly two model calls: one initial call and one
+semantic repair. No partial `plan_json` was persisted. The final candidate had
+10 scenes, but semantic validation stopped before timeline allocation. The
+three exact errors were:
+
+```json
+[
+  {"loc":["environments","Ruộng lúa Đồng bằng Bắc Bộ","terrain"],"type":"terrain_not_flat","msg":"Red River Delta terrain must be flat alluvial plain."},
+  {"loc":["environments","Bờ sông","terrain"],"type":"terrain_not_flat","msg":"Red River Delta terrain must be flat alluvial plain."},
+  {"loc":["environments","Vườn cây cộng đồng","terrain"],"type":"terrain_not_flat","msg":"Red River Delta terrain must be flat alluvial plain."}
+]
+```
+
+The persisted failure records `validation_stage=semantic_validation`,
+`error_count=3`, `failed_scene_orders=[1,2,3,4,5,6,7,8,9,10]`, candidate
+response SHA-256
+`79323d569a89e1337d92d865991307bfbe7543decc055b11237925857d0a510a`, and
+empty timeline provenance. Inference latency was 41,272 ms. VRAM was 1,367 MiB
+before, 31,055 MiB peak, and 1,375 MiB after unload; unload and release were
+verified. `ollama ps` was empty afterward. The v1, v2, and v3 failed rows were
+read-only compared and remain unchanged. No additional live compilation was
+made. The checkpoint therefore remains
+`RUNTIME_READY_FOR_LIVE_RETEST_R2_WITH_FAILURE`; it does not claim
+`QWEN_PROMPT_PLANNER_READY` and is not a `PROMPT_TO_VIDEO_PASS`.

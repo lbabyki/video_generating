@@ -35,7 +35,7 @@ def main() -> int:
         identity = planner.identity()
         if (settings.ollama_model != "qwen3:14b" or identity.get("resolved_digest", "").removeprefix("sha256:") != EXPECTED_DIGEST
                 or identity.get("quantization") != "Q4_K_M" or identity.get("license") != "Apache-2.0"
-                or identity.get("template_version") != "phase3b-v3" or settings.prompt_planner_temperature != 0
+                or identity.get("template_version") != "phase3b-v4" or settings.prompt_planner_temperature != 0
                 or settings.prompt_planner_seed != 314159 or settings.ollama_keep_alive not in {"0", "0s"}):
             print("FAIL: model, digest, quantization, license, template, temperature, seed, or keep_alive does not match the approved live run", file=sys.stderr)
             return 2
@@ -85,12 +85,20 @@ def main() -> int:
             raise RuntimeError("golden output includes a scene outside 3–8 seconds")
         if plan.cultural_profile_id != request.requested_cultural_profile:
             raise RuntimeError("golden output cultural profile does not match Red River Delta request")
-        if len(plan.environments) != 1 or not (plan.environments[0].region == "NORTHERN_VIETNAM" and plan.environments[0].subregion == "RED_RIVER_DELTA"):
-            raise RuntimeError("golden output has no Red River Delta environment")
-        if plan.environments[0].terrain.casefold() not in {"flat_alluvial_plain", "flat alluvial plain", "alluvial plain, flat"}:
+        if not plan.environments or any(not (environment.region == "NORTHERN_VIETNAM" and environment.subregion == "RED_RIVER_DELTA") for environment in plan.environments):
+            raise RuntimeError("golden output must contain one compatible Red River Delta location environment")
+        if any(environment.terrain.casefold() not in {"flat_alluvial_plain", "flat alluvial plain", "alluvial plain, flat", "flat_delta"} for environment in plan.environments):
             raise RuntimeError("golden output terrain is not flat")
-        if any(scene.environment_id != plan.environments[0].environment_id for scene in plan.scenes):
-            raise RuntimeError("golden output did not reuse a stable environment ID across scenes")
+        if plan.regional_environment_profile is None:
+            raise RuntimeError("golden output omitted RegionalEnvironmentProfile")
+        profile = plan.regional_environment_profile
+        if profile.canonical_region_key != "red-river-delta" or profile.terrain != "flat_delta":
+            raise RuntimeError("golden output regional profile is not canonical Red River Delta flat_delta")
+        location_by_id = {location.scene_location_id: location for location in plan.scene_locations}
+        if not location_by_id or any(scene.environment_id not in location_by_id for scene in plan.scenes):
+            raise RuntimeError("golden output scene locations are missing or unresolved")
+        if any(location.regional_environment_profile_id != profile.regional_environment_profile_id for location in location_by_id.values()):
+            raise RuntimeError("golden output locations do not share one regional profile ID")
         required_forbidden = {"núi cao", "làng nhà sàn", "kiến trúc cung điện trung hoa", "kiến trúc cung điện nhật"}
         if not any(required_forbidden <= {item.casefold() for item in env.forbidden_elements} for env in plan.environments):
             raise RuntimeError("golden output omitted required forbidden visual patterns")
@@ -102,6 +110,9 @@ def main() -> int:
             raise RuntimeError("golden output grounding/governance gate failed")
         if any(scene.keyframe_status != "NOT_GENERATED" or scene.locked for scene in plan.scenes):
             raise RuntimeError("golden output must not create keyframes or locks")
+        timeline = compilation.get("timeline_provenance") or {}
+        if timeline.get("allocator_version") != "largest-remainder-v1" or len(timeline.get("scenes", [])) != len(plan.scenes):
+            raise RuntimeError("persisted timeline provenance is incomplete")
         validation_response = client.post(f"/prompt-compilations/{compilation['id']}/validate")
         validation = validation_response.json()
         if validation_response.status_code != 200 or not validation.get("valid"):
@@ -135,6 +146,11 @@ def main() -> int:
         "duration_seconds": float(sum(durations, Decimal("0"))),
         "character_ids": [character.character_id for character in plan.characters],
         "environment_ids": [environment.environment_id for environment in plan.environments],
+        "regional_environment_profile_id": profile.regional_environment_profile_id,
+        "scene_locations": [{"scene_order": scene.scene_number, "title": scene.title,
+            "scene_location_id": scene.environment_id, "location_name": location_by_id[scene.environment_id].name,
+            "regional_environment_profile_id": location_by_id[scene.environment_id].regional_environment_profile_id}
+            for scene in plan.scenes],
         "grounding_status": plan.grounding_status,
         "governance_status": plan.governance_status,
         "repair_attempts": compilation["repair_attempts"],
@@ -143,6 +159,7 @@ def main() -> int:
         "elapsed_seconds": elapsed_seconds,
         "preflight": preflight,
         "resource_metrics": metrics,
+        "timeline_provenance": timeline,
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0
