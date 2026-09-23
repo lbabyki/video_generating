@@ -1,9 +1,8 @@
 # Phase 3B — Local Qwen Prompt Planner
 
-Status: **RUNTIME_READY_FOR_LIVE_RETEST_R3**. Phase 3B-R3 adds deterministic
-terrain resolution after the phase3b-v4 semantic failure. This checkpoint does
-not claim `QWEN_PROMPT_PLANNER_READY` or `PROMPT_TO_VIDEO_PASS`. All four
-failed records are preserved, and no live inference was run in R3.
+Status: **QWEN_PROMPT_PLANNER_READY**. Phase 3B-R3 terrain resolution passed
+one authorized live golden compilation with `phase3b-v5`. This checkpoint is
+not a `PROMPT_TO_VIDEO_PASS`; all four historical failed records are preserved.
 
 ## Scope and API
 
@@ -234,6 +233,51 @@ metrics were 1,303 MiB before, 31,144 MiB peak, and 1,292 MiB after unload;
 `unload_verified` and `vram_released` were true. `ollama ps` was empty after
 inference. The v1 and v2 failed rows remain unchanged. No fourth live attempt
 was made.
+
+## Phase 3B-R3 live golden compilation — phase3b-v5
+
+Exactly one live compilation ran on 2026-09-23 using the Lesson 08 request.
+Preflight confirmed empty `ollama ps`, no ComfyUI or training workers, and the
+locked Qwen provenance: `qwen3:14b`, digest
+`bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8`, Q4_K_M,
+Apache-2.0, temperature 0, seed 314159, and `keep_alive=0`. Diagnostic storage
+was enabled locally with the existing Git-ignored, 0600 policy; no repair was
+needed and no thinking/reasoning was stored.
+
+Compilation `88e6c89b-8924-4661-b7ec-c3d73cc9d4ba` **SUCCEEDED** with one
+initial model call and zero repairs. The plan has eight scenes and total
+duration 45 seconds:
+
+| # | Title | Location | Final duration |
+|---:|---|---|---:|
+| 1 | Mở đầu: Cảnh đồng bằng Bắc Bộ | Ruộng lúa Đồng bằng Bắc Bộ | 5s |
+| 2 | Học sinh đến trường | Trường học | 5s |
+| 3 | Bài học về bảo vệ môi trường | Trường học | 5s |
+| 4 | Học sinh ra ngoài thực hành | Bờ sông | 6s |
+| 5 | Người dân tham gia | Bờ sông | 6s |
+| 6 | Cây non được trồng | Bờ sông | 5s |
+| 7 | Thông điệp bảo vệ thiên nhiên | Ruộng lúa Đồng bằng Bắc Bộ | 8s |
+| 8 | Kết thúc | Ruộng lúa Đồng bằng Bắc Bộ | 5s |
+
+The regional profile is `red-river-delta`, terrain `flat_delta`, with profile
+ID `ff0c1615-3aac-5901-94df-6a00ca731063`. All locations share that profile.
+Location IDs are deterministic UUID5 values: rice field
+`55284b23-c8ac-5e9e-869f-793081873e00`, riverbank
+`780190e3-0ab3-596d-979a-42ba8104a1f1`, and school
+`68b8e2a3-517e-5ea2-9c3b-1d40ba9a9002`. Persisted terrain provenance uses
+`terrain-normalization-v1`; each model proposal resolved to `flat_delta` from
+the regional profile with no conflict. Timeline provenance uses
+`largest-remainder-v1`; suggested/final durations and adjustment reasons are
+persisted, including 4→5, 10→8, and 4→5 second adjustments.
+
+Governance is `DRAFT`, `release_eligible=false`, grounding is `PENDING`, and
+there are no keyframes, media outputs, or source references. Character IDs and
+environment/location IDs are deterministic UUID5 values and are reused
+consistently across scenes. Inference latency was 17,645 ms; VRAM was 1,399 MiB
+before, 31,140 MiB peak, and 1,447 MiB after unload. Unload and VRAM release
+were verified. Post-run `ollama ps` was empty. The four historical failed rows
+remain unchanged. This is `QWEN_PROMPT_PLANNER_READY`, not
+`PROMPT_TO_VIDEO_PASS`.
 
 ## Phase 3B-R2 authorized golden live compilation — phase3b-v4
 
