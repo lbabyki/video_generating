@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import (CharacterBible, EvidenceLink, EnvironmentBible, GroundingRequirement,
     ReferenceSource, VisualBibleAudit, VisualBibleReview, VisualBibleSet, VisualPromptPackage)
+from app.reviewer_identity import require_reviewer
 
 REFERENCE_ROOT = Path("/home/ailab/videoAI_project/videoAI_data/references").resolve()
 MAX_REFERENCE_BYTES = int(os.getenv("GROUNDING_MAX_REFERENCE_BYTES", str(50 * 1024 * 1024)))
@@ -73,9 +74,10 @@ def review_evidence(db: Session, evidence_id: str, payload: dict) -> EvidenceLin
     if not link or not source: raise ValueError("evidence not found")
     status=payload.get("review_status")
     if status not in REVIEW_STATUSES or not payload.get("reviewer_id"): raise ValueError("human reviewer and valid review status are required")
+    reviewer = require_reviewer(db, payload["reviewer_id"], "evidence")
     req=db.get(GroundingRequirement,link.grounding_requirement_id); bible=db.get(VisualBibleSet,req.bible_set_id)
     if bible.status == "LOCKED": raise ValueError("LOCKED bible sets are immutable")
-    link.review_status=status; link.reviewer_id=payload["reviewer_id"]; link.reviewed_at=datetime.now(UTC); link.notes=payload.get("notes")
+    link.review_status=status; link.reviewer_id=reviewer.id; link.reviewed_at=datetime.now(UTC); link.notes=payload.get("notes")
     links=db.scalars(select(EvidenceLink).where(EvidenceLink.grounding_requirement_id==req.id)).all()
     if status == "SUPPORTED" and source.usage_permission != "BLOCKED" and any(x.review_status=="SUPPORTED" for x in links): req.status="SUPPORTED"; req.review_required=False
     elif status in {"REJECTED","BLOCKED"}: req.status=status; req.review_required=True
@@ -86,7 +88,10 @@ def save_review(db: Session, bible_id: str, target_type: str, target_id: str, pa
     if not bible: raise ValueError("bible not found")
     if bible.status == "LOCKED": raise ValueError("LOCKED bible sets are immutable")
     if payload.get("status") != "APPROVED" or not payload.get("reviewer_id"): raise ValueError("human APPROVED review is required")
-    review=VisualBibleReview(id=str(uuid4()),bible_set_id=bible_id,target_type=target_type,target_id=target_id,checklist_json=json.dumps(payload.get("checklist",{}),ensure_ascii=False),status="APPROVED",reviewer_id=payload["reviewer_id"],reviewed_at=datetime.now(UTC),notes=payload.get("notes"))
+    purpose = {"CHARACTER": "character", "ENVIRONMENT": "environment", "CULTURAL": "cultural"}.get(target_type)
+    if not purpose: raise ValueError("invalid review target")
+    reviewer = require_reviewer(db, payload["reviewer_id"], purpose)
+    review=VisualBibleReview(id=str(uuid4()),bible_set_id=bible_id,target_type=target_type,target_id=target_id,checklist_json=json.dumps(payload.get("checklist",{}),ensure_ascii=False),status="APPROVED",reviewer_id=reviewer.id,reviewed_at=datetime.now(UTC),notes=payload.get("notes"))
     db.add(review)
     if target_type == "CHARACTER":
         item = db.get(CharacterBible, target_id)
@@ -94,7 +99,7 @@ def save_review(db: Session, bible_id: str, target_type: str, target_id: str, pa
     if target_type == "ENVIRONMENT":
         item = db.get(EnvironmentBible, target_id)
         if item and item.bible_set_id == bible_id: item.review_status = "APPROVED"
-    _invalidate(db,bible,f"{target_type}_REVIEWED",payload["reviewer_id"]); db.commit(); db.refresh(review); return review
+    _invalidate(db,bible,f"{target_type}_REVIEWED",reviewer.id); db.commit(); db.refresh(review); return review
 
 def grounding_view(db: Session, bible_id: str) -> dict:
     bible=db.get(VisualBibleSet,bible_id)

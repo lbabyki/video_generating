@@ -337,3 +337,25 @@ class VisualBibleAudit(Base):
     actor_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     details_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class HumanReviewer(Base):
+    __tablename__ = "human_reviewers"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="ACTIVE")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    provenance: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_by_method: Mapped[str] = mapped_column(String(40), nullable=False, default="local_cli")
+    __table_args__ = (UniqueConstraint("display_name", "role", name="uq_human_reviewer_name_role"),)
+
+
+class HumanReviewerAudit(Base):
+    __tablename__ = "human_reviewer_audits"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    reviewer_id: Mapped[str] = mapped_column(ForeignKey("human_reviewers.id", ondelete="CASCADE"), nullable=False)
+    action: Mapped[str] = mapped_column(String(80), nullable=False)
+    details_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
