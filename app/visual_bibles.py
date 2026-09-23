@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import (CharacterBible, EnvironmentBible, GroundingRequirement,
-    PromptCompilationRecord, SceneVisualBinding, VisualBibleSet, VisualPromptPackage)
+    PromptCompilationRecord, SceneVisualBinding, VisualBibleSet, VisualPromptPackage, VisualBibleReview)
 
 FORBIDDEN = ["high mountains", "mountain valley", "stilt-house village", "Tây Bắc/Tây Nguyên architecture",
              "Chinese/Japanese palace architecture", "fake text", "watermark", "unrequested modern foreign landmark"]
@@ -113,7 +113,11 @@ class VisualBibleService:
     def _assert_grounding(self,bible):
         if any(r.status == "PENDING" or r.review_required for r in self.db.scalars(select(GroundingRequirement).where(GroundingRequirement.bible_set_id==bible.id))): raise ValueError("grounding requirements are still pending")
     def _assert_complete(self,bible):
-        if any(x.review_status != "APPROVED" for x in self.db.scalars(select(CharacterBible).where(CharacterBible.bible_set_id==bible.id))) or any(x.review_status != "APPROVED" for x in self.db.scalars(select(EnvironmentBible).where(EnvironmentBible.bible_set_id==bible.id))): raise ValueError("cultural or bible review is incomplete")
+        chars=list(self.db.scalars(select(CharacterBible).where(CharacterBible.bible_set_id==bible.id)))
+        envs=list(self.db.scalars(select(EnvironmentBible).where(EnvironmentBible.bible_set_id==bible.id)))
+        reviews=list(self.db.scalars(select(VisualBibleReview).where(VisualBibleReview.bible_set_id==bible.id)))
+        if len(chars) != 2 or len(envs) != 4 or any(x.review_status != "APPROVED" for x in chars+envs): raise ValueError("cultural or bible review is incomplete")
+        if not any(x.target_type == "CULTURAL" and x.status == "APPROVED" for x in reviews): raise ValueError("cultural review is incomplete")
 
 def bible_response(bible: VisualBibleSet, db: Session) -> dict:
     def row(item): return {k: v for k, v in item.__dict__.items() if not k.startswith("_")}

@@ -92,6 +92,19 @@ class ReferenceSource(Base):
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
     provenance: Mapped[str] = mapped_column(Text, nullable=False)
     license: Mapped[str] = mapped_column(String(240), nullable=False)
+    organization: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False, default="FACTUAL_REFERENCE")
+    local_file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    canonical_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    publication_date: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    access_date: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    page_or_section: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
+    mime_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    usage_permission: Mapped[str] = mapped_column(String(32), nullable=False, default="UNKNOWN")
+    attribution: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    review_status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
 
 
 class DatasetAssetReview(Base):
@@ -287,3 +300,40 @@ class GroundingRequirement(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
     source_reference_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class EvidenceLink(Base):
+    __tablename__ = "evidence_links"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    grounding_requirement_id: Mapped[str] = mapped_column(ForeignKey("grounding_requirements.id", ondelete="CASCADE"), nullable=False)
+    source_id: Mapped[str] = mapped_column(ForeignKey("reference_sources.id"), nullable=False)
+    page_or_section: Mapped[str] = mapped_column(String(240), nullable=False)
+    evidence_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    supported_claim: Mapped[str] = mapped_column(Text, nullable=False)
+    reviewer_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    review_status: Mapped[str] = mapped_column(String(24), nullable=False, default="PENDING")
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class VisualBibleReview(Base):
+    __tablename__ = "visual_bible_reviews"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    bible_set_id: Mapped[str] = mapped_column(ForeignKey("visual_bible_sets.id", ondelete="CASCADE"), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    checklist_json: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="PENDING")
+    reviewer_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class VisualBibleAudit(Base):
+    __tablename__ = "visual_bible_audits"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    bible_set_id: Mapped[str] = mapped_column(ForeignKey("visual_bible_sets.id", ondelete="CASCADE"), nullable=False)
+    action: Mapped[str] = mapped_column(String(80), nullable=False)
+    actor_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    details_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

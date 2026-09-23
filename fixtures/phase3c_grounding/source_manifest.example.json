@@ -1,0 +1,11 @@
+{
+  "title": "Example reference title",
+  "organization": "Example organization",
+  "source_type": "FACTUAL_REFERENCE",
+  "local_relative_path": "example/reference.pdf",
+  "page_or_section": "Section 1",
+  "license": "Specify license",
+  "usage_permission": "REFERENCE_ONLY",
+  "attribution": "Specify attribution",
+  "intended_requirements": ["requirement-id"]
+}
