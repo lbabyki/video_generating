@@ -153,3 +153,32 @@ Status: `VISUAL_PROMPT_V3_READY_FOR_HUMAN_REVIEW`
 - Eight v2 packages remain preserved as `SUPERSEDED`; eight deterministic v3 packages are `ACTIVE`, `DRAFT`, unreleasable and keyframe-free.
 - v3 packages use structured style/environment/subject/action/composition/camera/lighting/continuity/workflow metadata. Model-facing prompts contain natural-language flat lowland descriptions and no UUIDs.
 - VisualBibleSet remains `IN_REVIEW`; cultural review remains `PENDING`. No CHARACTER_CONSISTENCY_PASS, VISUAL_BIBLE_APPROVED, KEYFRAME_PASS or PROMPT_TO_VIDEO_PASS is claimed.
+
+## Phase 3C-C2E — Final Visual Prompt Lock Readiness
+
+Status: `VISUAL_PROMPT_V4_LOCK_READINESS_REVIEW`
+
+- SDXL Base registry record and local checkpoint matched: revision `462165984030d82259a11f4367a4eed129e94a7b`, SHA-256 `31e35c80fc4829d14f90153f4c74cd59c90b779f6afe05a74cd6120b893f7e5b`, architecture `SDXL_BASE`.
+- Student CharacterBible v2 records the approved restricted Đội viên wardrobe; v1 remains preserved. Teacher remains `DRAFT` with a pending human review checklist.
+- Background student and community-adult cohorts are metadata descriptors without persistent UUID identities.
+- Eight v1, v2 and v3 packages remain preserved as `SUPERSEDED`; eight deterministic v4 packages are `ACTIVE`, DRAFT, unreleasable and keyframe-free.
+- V4 separates static keyframe prompts from motion intent, camera motion and transition metadata. Model-facing prompts contain natural language camera descriptions and no internal UUID/hash/governance tokens.
+- VisualBibleSet remains `IN_REVIEW`; cultural review remains `PENDING`. No inference or media generation ran.
+
+## Phase 3C-C2E — Confirmation and role-scoped lock gate
+
+- Reviewer `40a6df62-f60a-439c-8509-890b9db2ee08` approved the teacher CharacterBible within the authorized `PROJECT_OWNER` character-review scope. The decision scope and timestamp are stored in `VisualBibleReview` and audit records.
+- Student uniform remains approved with restricted Đội viên scope; background students do not inherit the red scarf by default.
+- The requested cultural approval was not recorded because this reviewer is `PROJECT_OWNER` and the cultural endpoint requires an active `CULTURAL_REVIEWER`. A role-gate audit was recorded; cultural review remains `PENDING`.
+- VisualBibleSet remains `IN_REVIEW`; no APPROVED/LOCKED transition, render lock, keyframe, media generation, or inference was performed.
+
+## Phase 3C-C2F — Cultural Review and Content Approval
+
+Status: `CONTENT_APPROVED`
+
+- Cultural reviewer `241e7b2d-9d76-4caa-97d8-9796478a5fa0` was verified ACTIVE with role `CULTURAL_REVIEWER` and recorded `APPROVED_WITH_RESTRICTED_SCOPE` with timestamp and scope.
+- Teacher CharacterBible, student v2 CharacterBible, four EnvironmentBibles, seven GroundingResolution records, and eight active v4 packages passed the approval gate.
+- VisualBibleSet transitioned from `IN_REVIEW` to `APPROVED` as content approval only. `release_eligible=false`; no render lock or production lock was created.
+- v1/v2/v3 packages remain preserved as `SUPERSEDED`; v4 remains `ACTIVE`, DRAFT, keyframe-free, and unreleasable.
+- LoRA status remains `NOT_ASSIGNED`; reference status remains `NOT_GENERATED`; consistency readiness remains `PROMPT_ONLY`.
+- No Qwen, ComfyUI, SDXL, LoRA, TTS, video inference, keyframe generation, or media generation ran.

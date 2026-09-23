@@ -298,6 +298,19 @@ class VisualPromptPackage(Base):
     action_prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
     continuity_constraints: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     workflow_metadata: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    base_model_revision: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    base_model_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    checkpoint_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    model_architecture: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    style_lora_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    character_lora_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    lora_status: Mapped[str] = mapped_column(String(24), nullable=False, default="NOT_ASSIGNED")
+    background_cohorts: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    keyframe_prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    keyframe_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    motion_intent: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    intended_camera_motion: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    video_transition_hint: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
 
 class GroundingRequirement(Base):
